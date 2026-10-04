@@ -1,0 +1,92 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 13,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "description": "Base preset for the candleLight USB2CANFD application: HPM_BUILD_TYPE=flash_dfu, i.e. an APP image linked at 0x80020000 which is started by hpm_dfu_boot at 0x80000000",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "HPM_BUILD_TYPE": "flash_dfu",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CUSTOM_TARGET_TRIPLET": "riscv-none-elf"
+            }
+        },
+        {
+            "name": "base-debug",
+            "hidden": true,
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "hpm5321_usb2can-dfu",
+            "displayName": "candleLight USB2CANFD - HPM5321 USB2CAN dongle (Release)",
+            "inherits": "base",
+            "cacheVariables": {
+                "BOARD": "hpm5321_usb2can"
+            },
+            "binaryDir": "${sourceDir}/build/hpm5321_usb2can-dfu"
+        },
+        {
+            "name": "hscant-dfu",
+            "displayName": "candleLight USB2CANFD - HSCanT (Release)",
+            "inherits": "base",
+            "cacheVariables": {
+                "BOARD": "hscant"
+            },
+            "binaryDir": "${sourceDir}/build/hscant-dfu"
+        },
+        {
+            "name": "hpm5321_usb2can-dfu-debug",
+            "displayName": "candleLight USB2CANFD - HPM5321 USB2CAN dongle (Debug)",
+            "inherits": "base-debug",
+            "cacheVariables": {
+                "BOARD": "hpm5321_usb2can"
+            },
+            "binaryDir": "${sourceDir}/build/hpm5321_usb2can-dfu-debug"
+        },
+        {
+            "name": "hscant-dfu-debug",
+            "displayName": "candleLight USB2CANFD - HSCanT (Debug)",
+            "inherits": "base-debug",
+            "cacheVariables": {
+                "BOARD": "hscant"
+            },
+            "binaryDir": "${sourceDir}/build/hscant-dfu-debug"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "hpm5321_usb2can-dfu",
+            "displayName": "Build candleLight USB2CANFD - HPM5321 USB2CAN dongle (Release)",
+            "configurePreset": "hpm5321_usb2can-dfu",
+            "jobs": 8
+        },
+        {
+            "name": "hscant-dfu",
+            "displayName": "Build candleLight USB2CANFD - HSCanT (Release)",
+            "configurePreset": "hscant-dfu",
+            "jobs": 8
+        },
+        {
+            "name": "hpm5321_usb2can-dfu-debug",
+            "displayName": "Build candleLight USB2CANFD - HPM5321 USB2CAN dongle (Debug)",
+            "configurePreset": "hpm5321_usb2can-dfu-debug",
+            "jobs": 8
+        },
+        {
+            "name": "hscant-dfu-debug",
+            "displayName": "Build candleLight USB2CANFD - HSCanT (Debug)",
+            "configurePreset": "hscant-dfu-debug",
+            "jobs": 8
+        }
+    ]
+}

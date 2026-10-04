@@ -1,0 +1,250 @@
+{
+  "clientKey": "bf137ef1d3d43f9331c6c86e5e82d6bd",
+  "secretKey": "a1628c1243c0e8fd3a0019127d6e16f1",
+  "content": {
+    "pid": "eae37ed6-daa7-4ab1-8071-cc7a846b7dfc",
+    "info": {
+      "projectName": "HPM5321_QFN48_USB2CAN",
+      "sdkName": "1.11.0",
+      "socName": "HPM5321",
+      "packageName": "QFN48",
+      "createTime": 1771246469500,
+      "updateTime": 1783701510284,
+      "vscodePid": "8072ec7f-c363-4571-8bc6-0fff53852875"
+    },
+    "pinmux": {
+      "functions": {
+        "init_can_pins": {
+          "selectPins": {
+            "PA01": {
+              "signal": "MCAN0.A.RXD",
+              "padCtls": {}
+            },
+            "PA00": {
+              "signal": "MCAN0.A.TXD",
+              "padCtls": {}
+            },
+            "PA31": {
+              "signal": "MCAN3.B.TXD",
+              "padCtls": {}
+            },
+            "PA30": {
+              "signal": "MCAN3.B.RXD",
+              "padCtls": {}
+            },
+            "PA08": {
+              "signal": "MCAN2.A.TXD",
+              "padCtls": {}
+            },
+            "PA09": {
+              "signal": "MCAN2.A.RXD",
+              "padCtls": {}
+            },
+            "PA04": {
+              "signal": "MCAN1.A.RXD",
+              "padCtls": {}
+            },
+            "PA05": {
+              "signal": "MCAN1.A.TXD",
+              "padCtls": {}
+            }
+          }
+        },
+        "init_gpio_pins": {
+          "selectPins": {
+            "PA03": {
+              "signal": "GPIO.A.A[03]",
+              "padCtls": {}
+            }
+          },
+          "managers": {
+            "gpiom": {
+              "PA03": {
+                "direction": "0",
+                "gpioController": "1",
+                "gpioControllerHide": "[\"2\"]",
+                "registerLock": "0",
+                "interrupt": "0"
+              }
+            }
+          }
+        },
+        "init_led_pins": {
+          "selectPins": {
+            "PA10": {
+              "signal": "GPIO.A.A[10]",
+              "padCtls": {}
+            },
+            "PA03": {
+              "signal": "GPIO.A.A[03]",
+              "padCtls": {}
+            },
+            "PA02": {
+              "signal": "GPIO.A.A[02]",
+              "padCtls": {}
+            },
+            "PA26": {
+              "signal": "GPIO.A.A[26]",
+              "padCtls": {}
+            },
+            "PA27": {
+              "signal": "GPIO.A.A[27]",
+              "padCtls": {}
+            },
+            "PA28": {
+              "signal": "GPIO.A.A[28]",
+              "padCtls": {}
+            },
+            "PB08": {
+              "signal": "GPIO.A.B[08]",
+              "padCtls": {}
+            },
+            "PB09": {
+              "signal": "GPIO.A.B[09]",
+              "padCtls": {}
+            },
+            "PB10": {
+              "signal": "GPIO.A.B[10]",
+              "padCtls": {}
+            }
+          },
+          "managers": {
+            "gpiom": {
+              "PA10": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[]",
+                "outputLevel": "0"
+              },
+              "PA03": {
+                "direction": "0",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]"
+              },
+              "PA02": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              },
+              "PA26": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              },
+              "PA27": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              },
+              "PA28": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              },
+              "PB08": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              },
+              "PB09": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              },
+              "PB10": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              }
+            }
+          }
+        },
+        "init_uart_pins": {
+          "selectPins": {
+            "PY01": {
+              "signal": "UART0.G.RXD",
+              "padCtls": {}
+            },
+            "PY00": {
+              "signal": "UART0.G.TXD",
+              "padCtls": {}
+            }
+          }
+        },
+        "init_usb_pins": {
+          "selectPins": {
+            "PA25": {
+              "signal": "USBPHY.A.USB_DM",
+              "padCtls": {}
+            },
+            "PA24": {
+              "signal": "USBPHY.A.USB_DP",
+              "padCtls": {}
+            }
+          }
+        }
+      },
+      "alias": {
+        "PA10": "CAN0_TR",
+        "PA03": "BOOT",
+        "PA02": "CAN0_STA",
+        "PA26": "CAN1_TR",
+        "PA27": "CAN1_STA",
+        "PA28": "CAN2_TR",
+        "PB08": "CAN2_STA",
+        "PB09": "CAN3_TR",
+        "PB10": "CAN3_STA"
+      },
+      "sorter": [
+        "init_can_pins",
+        "init_led_pins",
+        "init_usb_pins",
+        "init_uart_pins",
+        "init_gpio_pins"
+      ]
+    },
+    "clock": {
+      "functions": {
+        "init_clocks": {
+          "selectClocks": {
+            "srcClocks": [
+              "osc32k",
+              "osc24m",
+              "clk0_pll0",
+              "clk1_pll0",
+              "clk2_pll0",
+              "clk0_pll1",
+              "clk1_pll1",
+              "clk2_pll1",
+              "clk3_pll1"
+            ],
+            "funcClocks": []
+          },
+          "enableClocks": {},
+          "pllClkConfig": {
+            "pll0": {
+              "params": {
+                "mfd": 240000000,
+                "mfi": 40,
+                "mfn": 0
+              }
+            }
+          },
+          "srcClkConfig": {
+            "clk0_pll0": {
+              "divFactor": 0
+            }
+          }
+        }
+      },
+      "sorter": []
+    }
+  }
+}
