@@ -99,6 +99,8 @@ typedef struct {
 
 /* ------------------------------------------------------------------ */
 /* Unique ID, used by candleLight_fw/src/usbd_desc.c for the USB iSerial */
+/* Filled from the chip UUID by HAL_Init(); not a compile-time constant  */
+/* because two boards must not report the same serial number.            */
 /* ------------------------------------------------------------------ */
-extern const uint8_t hpm_uid[12];
+extern uint8_t hpm_uid[12];
 #define UID_BASE ((uint32_t)(uintptr_t)hpm_uid)
