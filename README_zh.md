@@ -13,7 +13,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | 项目 | 值 |
 | --- | --- |
 | USB VID:PID | `0x1d50:0x606f`（OpenMoko / candleLight） |
-| USB 速度 | 高速（512 B 批量端点）/ 全速（64 B 批量端点），自动切换 |
+| USB 速度 | **高速，480 Mbit/s（512 B 批量端点）**；桥接层按主机协商结果提供 HS 或 FS 描述符。`main.c` 里的 `DEVICE_FS` 参数是无效的 —— `USBD_Init()` 会忽略它 —— 实际由 `src/usb_config.h` 默认选择 `CONFIG_USB_HS` |
 | 接口 0 | `gs_usb`，厂商自定义类 `0xFF/0xFF/0xFF`，2 个批量端点 |
 | 接口 1 | DFU runtime `0xFE/0x01/0x01`（仅 detach，无端点） |
 | Windows 驱动 | **无需驱动** —— MS OS 1.0 / WCID 使 Windows 自动绑定 `winusb.sys` |
@@ -27,13 +27,24 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | 功能 | 状态 |
 | --- | --- |
 | 与 `hpm_dfu_boot` 配合的 DFU 烧录 | **已在硬件上验证** |
-| USB 枚举（HS/FS，Windows 下 WCID 免驱） | **已在硬件上验证** |
-| CAN / CAN-FD 帧转发 | 已实现，**尚未在硬件上验证** |
-| 多通道（4 路 MCAN） | 已实现，**尚未在硬件上验证** |
-| 四通道终端电阻开关 | **未实现**（未向主机上报该特性） |
+| USB 枚举（高速，Windows 下 WCID 免驱） | **已在硬件上验证** |
+| CAN / CAN-FD 帧转发 | **已在硬件上验证** —— 经典帧与 CAN-FD BRS、双向，既对过 PEAK PCAN，也做过通道互连 |
+| 多通道（4 路 MCAN） | **已在硬件上验证** —— 四路全测，含三节点共总线 |
+| 位定时 / 采样点 | **已验证** —— 主机协商的采样点确实落进 `NBTP`/`DBTP`（500k/2M 与 1M/4M @80% 均核对过） |
+| 四通道终端电阻开关 | **已在硬件上验证** —— `GS_CAN_FEATURE_TERMINATION`，用 `ip link set canX type can termination 120` 控制 |
+| 总线错误上报（`CAN_ERR_ACK` / `PROT` / `CRTL`，TEC/REC） | 已实现；各类错误都在故意做坏的总线上实际触发过，但系统化回归还没做 |
 | WS2812 收发指示灯驱动 | **未实现** |
+| 吞吐 / 压力测试 | 未做 |
 
-命令面（`BITTIMING`、`DATA_BITTIMING`、`MODE`、`BT_CONST(_EXT)`、`DEVICE_CONFIG`、`TIMESTAMP`、`IDENTIFY`、`HOST_FORMAT`、TX 回声、时间戳，以及 `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`）是完整的，但目前只有枚举与 DFU 做过端到端验证。
+命令面（`BITTIMING`、`DATA_BITTIMING`、`MODE`、`BT_CONST(_EXT)`、`DEVICE_CONFIG`、`TIMESTAMP`、`IDENTIFY`、`HOST_FORMAT`、TX 回声、时间戳，以及 `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`）是完整的，且枚举、DFU、帧转发与终端电阻控制都已端到端跑过。
+
+### 已知缺口 / 待办
+
+| 项目 | 还差什么 |
+| --- | --- |
+| 错误上报回归 | 逐类系统性验证：`CAN_ERR_ACK`、`PROT`（stuff / form / bit / CRC）、`CRTL`（warning、passive）、`BUSOFF`、RX overrun，以及 payload 里的 TEC/REC 和"仅在 LEC 变化时上报"的行为 |
+| 性能测试 | USB 高速下的帧速率、多通道同时打流、`RX dropped/missed`、TX 延迟。USB 已经是高速，所以瓶颈在 CAN 波特率与每帧的主机侧开销，而不是链路 |
+| WS2812 收发指示灯 | 尚未实现；`boards/hscant/` 目前只驱动 GPIOB[10] 上的 `SYS_LED` |
 
 ### 向主机上报的特性位
 
@@ -50,7 +61,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 #endif
 ```
 
-`GS_CAN_FEATURE_TERMINATION` 被**刻意不上报**：`TERM_Pin` 未定义，主机因此不会提供终端电阻控制项，固件也不会"虚标"。
+`GS_CAN_FEATURE_TERMINATION` 对 `BOARD_hscant` **是会上报的**：那里定义了 `TERM_Pin`，从而选用 `set_term()` / `get_term()`（本移植没有编译上游的 `src/gpio.c`，所以这两个钩子实现在 `src/port_board.c`），并经 `config.termination_set` 走到板级的 `board_can_set_termination()`（每通道一个 `CANx_RES`）。主机用法：`ip link set canX type can termination 120`（或 `termination 0`），且只能在接口 down 时修改。复位后终端电阻是断开的，与 `pinmux.c` 给 `CANx_RES` 的电平一致。
 
 ---
 
@@ -185,11 +196,18 @@ HPM 的 MCAN 就是 Bosch M_CAN，因此 `candleLight_fw/src/can/m_can.c` 几乎
 | --- | --- |
 | `HAL_FDCAN_Init` | `mcan_init()`（消息 RAM + CCCR） |
 | `HAL_FDCAN_Start` / `_Stop` | `CCCR.INIT` 位 |
-| `HAL_FDCAN_AddMessageToTxFifoQ` | `mcan_write_txbuf()` + `TXBAR` |
+| `HAL_FDCAN_AddMessageToTxFifoQ` | `mcan_transmit_via_txfifo_nonblocking()` |
 | `HAL_FDCAN_GetRxMessage` | `mcan_read_rxfifo()` |
 | `HAL_FDCAN_GetRxFifoFillLevel` | `RXF0S.F0FL` |
 
 所有排队与链表逻辑仍然发生在未修改的 `can_common.c` + `usbd_gs_can.c` 中。
+
+有四处不能 1:1 对应，也最耗调试时间：
+
+- **消息 RAM** —— 当 `MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1`（HPM5321/HPM5361）时它只是 AHB SRAM 的一块，应用必须在第一次 `mcan_init()` 之前用 `mcan_set_msg_buf_attr()` 登记；否则 `mcan_get_ram_size()` 返回 0，`mcan_init()` 在清 `CCCR.INIT` **之前**就失败，四路在主机侧都能起来，却既不发、不收，也不报错。
+- **发送** —— `TXFQS.TFQPI` 是整个 TX 缓冲数组的下标（先是专用缓冲，再是 FIFO 槽），所以必须走 TX FIFO 接口；传给只接受 `TXBC.NDTB` 以内下标的 `mcan_write_txbuf()` 会让每一帧都被丢弃。八个缓冲在这里全部配成同一个队列。
+- **CAN 时钟** —— 必须等于上报给主机的 `CAN_CLOCK_SPEED`（本板 80 MHz），因为主机据此推算预分频；否则两路之间仍然彼此一致（内部 loopback 也能通过），但谁都不符合主机认定的波特率。
+- **位定时兜底值** —— `can_init()` 里那组硬编码只在主机从未下发 `GS_USB_BREQ_BITTIMING` 时使用，已按本板 80 MHz 写成 500k / 2M @80%。
 
 ---
 
@@ -270,3 +288,46 @@ cmake --build --preset hscant-dfu
 ```
 
 产物位于 `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin`。
+
+---
+
+## 上机测试
+
+下面全部是 `can-utils` / `iproute2` 原生命令，不依赖任何辅助脚本。
+
+```bash
+# 起一路接口：500 kbit/s、80% 采样点
+sudo ip link set can0 down
+sudo ip link set can0 type can bitrate 500000 sample-point 0.8
+sudo ip link set can0 up
+ip -details -details link show can0        # 内核最终协商出的时序
+
+# 经典帧，双向
+candump can1 &                             # 在对端监听
+cansend can0 100#1122334455667788          # 从设备发出
+
+# CAN-FD（带 BRS）：仲裁 500 kbit/s、数据 2 Mbit/s，两段都是 80%
+sudo ip link set can0 type can bitrate 500000 sample-point 0.8 \
+                             dbitrate 2000000 dsample-point 0.8 fd on
+cansend can0 300##1AABBCCDDEEFF00112233445566778899AABBCCDD
+
+# 控制器内部回环：不需要总线、不需要第二个节点，单独证明帧转发通路
+sudo ip link set can0 type can loopback on
+candump can0 & cansend can0 100#1122334455667788
+
+# 终端电阻（接口必须处于 down；复位后两路都是断开）
+sudo ip link set can0 down
+sudo ip link set can0 type can termination 120     # 或 0
+
+# 硬件里到底存了什么，以及哪里出了问题
+ip -details -details link show can0        # NBTP/DBTP：prop-seg、phase-seg、sjw、采样点
+ip -details -statistics link show can0     # re-started / error-warn / error-pass / bus-off，TEC/REC
+candump -e "can0,#FFFFFFFF"                # 错误帧（发送过程中）
+```
+
+绝不要在同一步里既发又收：SocketCAN 的本地 TX 回环根本不经过总线，在**同一个**接口上一边
+`cansend` 一边 `candump`，会"收到"别的节点从未见过的帧。干净总线应表现为 `error-warn` /
+`error-pass` / `bus-off` / `re-started` 全为 0，且日志里没有任何 `ERRORFRAME`。
+
+> 值得记住的主机侧坑：`candump -e canX` **不会**打开内核的 `CAN_RAW_ERR_FILTER` —— `-e` 只决定输出格式，
+> 错误帧根本到不了 socket。要看到它们得用 `candump "canX,#FFFFFFFF"`。

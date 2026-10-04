@@ -13,7 +13,7 @@ The gs_usb protocol, the USB descriptors and — the important part — candleLi
 | Item | Value |
 | --- | --- |
 | USB VID:PID | `0x1d50:0x606f` (OpenMoko / candleLight) |
-| USB speed | High-Speed (512 B bulk) / Full-Speed (64 B bulk), auto-detected |
+| USB speed | **High-Speed, 480 Mbit/s (512 B bulk)**; the bridge serves HS or FS descriptors depending on what the host negotiates. The `DEVICE_FS` argument in `main.c` is inert — `USBD_Init()` ignores it — and `src/usb_config.h` selects `CONFIG_USB_HS` by default |
 | Interface 0 | `gs_usb`, vendor specific `0xFF/0xFF/0xFF`, 2 bulk endpoints |
 | Interface 1 | DFU runtime `0xFE/0x01/0x01` (detach only, no endpoints) |
 | Windows driver | **none** — MS OS 1.0 / WCID makes Windows bind `winusb.sys` |
@@ -27,13 +27,24 @@ Tested means "exercised on real hardware". Please read this table before filing 
 | Area | State |
 | --- | --- |
 | DFU flashing together with `hpm_dfu_boot` | **Verified on hardware** |
-| USB enumeration (HS/FS, driver-less on Windows via WCID) | **Verified on hardware** |
-| CAN / CAN-FD frame forwarding | Implemented, **not yet validated on hardware** |
-| Multi-channel (4 × MCAN) operation | Implemented, **not yet validated on hardware** |
-| Per-channel terminal resistor switch | **Not implemented** (feature not advertised to the host) |
+| USB enumeration (High-Speed, driver-less on Windows via WCID) | **Verified on hardware** |
+| CAN / CAN-FD frame forwarding | **Verified on hardware** — classic and CAN-FD BRS, both directions, against a PEAK PCAN and channel-to-channel |
+| Multi-channel (4 × MCAN) operation | **Verified on hardware** — all four channels, including a three node bus |
+| Bit timing / sample point | **Verified** — host-negotiated sample points land in `NBTP`/`DBTP` (checked 500k/2M and 1M/4M at 80 %) |
+| Per-channel terminal resistor switch | **Verified on hardware** — `GS_CAN_FEATURE_TERMINATION`, driven by `ip link set canX type can termination 120` |
+| Bus error reporting (`CAN_ERR_ACK` / `PROT` / `CRTL`, TEC/REC) | Implemented; all classes have been observed on a deliberately broken bus, a systematic regression pass is still missing |
 | WS2812 TX/RX activity LEDs | **Not implemented** |
+| Throughput / stress testing | Not done |
 
-The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `DEVICE_CONFIG`, `TIMESTAMP`, `IDENTIFY`, `HOST_FORMAT`, TX echo, timestamps, `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`) is complete, but only enumeration and DFU have been exercised end to end.
+The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `DEVICE_CONFIG`, `TIMESTAMP`, `IDENTIFY`, `HOST_FORMAT`, TX echo, timestamps, `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`) is complete, and enumeration, DFU, frame forwarding and the terminator control have all been exercised end to end.
+
+### Known Gaps / Next Steps
+
+| Item | What is left |
+| --- | --- |
+| Error reporting regression | Exercise every class systematically: `CAN_ERR_ACK`, `PROT` (stuff / form / bit / CRC), `CRTL` (warning, passive), `BUSOFF`, RX overrun, plus the TEC/REC fields in the payload and the LEC-transition de-duplication |
+| Performance testing | Frames/s over USB High-Speed, multi-channel stress (`cangen` on several channels at once), `RX dropped/missed`, TX latency. USB is already HS, so the ceiling is the CAN bit rate and the per-frame host overhead, not the link |
+| WS2812 TX/RX LEDs | Still missing; `boards/hscant/` currently drives only the single `SYS_LED` on GPIOB[10] |
 
 ### Feature Flags Reported to the Host
 
@@ -50,7 +61,7 @@ The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `D
 #endif
 ```
 
-`GS_CAN_FEATURE_TERMINATION` is intentionally **not** advertised: `TERM_Pin` is undefined, so the host never offers the termination control and the firmware never lies about it.
+`GS_CAN_FEATURE_TERMINATION` **is** advertised for `BOARD_hscant`: `TERM_Pin` is defined there, which selects `set_term()` / `get_term()` (implemented in `src/port_board.c`, since this port does not compile upstream's `src/gpio.c`) and reaches the board through `config.termination_set` → `board_can_set_termination()` (`CANx_RES`, one per channel). The host uses it with `ip link set canX type can termination 120` (or `termination 0`), which only works while the interface is down. After reset the terminators are off, matching the level `pinmux.c` leaves `CANx_RES` in.
 
 ---
 
@@ -185,11 +196,26 @@ The HPM MCAN is a Bosch M_CAN, so `candleLight_fw/src/can/m_can.c` maps over alm
 | --- | --- |
 | `HAL_FDCAN_Init` | `mcan_init()` (message RAM + CCCR) |
 | `HAL_FDCAN_Start` / `_Stop` | `CCCR.INIT` bit |
-| `HAL_FDCAN_AddMessageToTxFifoQ` | `mcan_write_txbuf()` + `TXBAR` |
+| `HAL_FDCAN_AddMessageToTxFifoQ` | `mcan_transmit_via_txfifo_nonblocking()` |
 | `HAL_FDCAN_GetRxMessage` | `mcan_read_rxfifo()` |
 | `HAL_FDCAN_GetRxFifoFillLevel` | `RXF0S.F0FL` |
 
 All queueing and linked-list work still happens in the unmodified `can_common.c` + `usbd_gs_can.c`.
+
+Four things do not map over 1:1 and cost most of the debugging time:
+
+- **Message RAM** — with `MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1` (HPM5321/HPM5361) it is a slice of AHB SRAM that the
+  application must register through `mcan_set_msg_buf_attr()` before the first `mcan_init()`. Otherwise
+  `mcan_get_ram_size()` returns 0, `mcan_init()` fails *before* clearing `CCCR.INIT`, and every channel comes
+  up on the host side but never transmits, receives or reports an error.
+- **TX** — `TXFQS.TFQPI` indexes the whole TX buffer array (dedicated buffers first, then the FIFO slots), so it
+  must go to the TX FIFO API. Passing it to `mcan_write_txbuf()`, which only accepts indexes below `TXBC.NDTB`,
+  fails for every frame. All eight buffers are configured as a single queue.
+- **CAN clock** — must equal the `CAN_CLOCK_SPEED` reported to the host, because the host derives the prescaler
+  from it. If it does not, both channels still agree with each other (and internal loopback passes) but nothing
+  matches the host's idea of the bit rate.
+- **Bit timing fallback** — the hardcoded values in `can_init()` are only used if the host never sends
+  `GS_USB_BREQ_BITTIMING`; they are set for this board's 80 MHz clock (500k and 2M at 80 %).
 
 ---
 
@@ -270,3 +296,48 @@ cmake --build --preset hscant-dfu
 ```
 
 Artifacts land in `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin`.
+
+---
+
+## Testing the Board
+
+Everything below is stock `can-utils` / `iproute2` — no helper script is involved.
+
+```bash
+# bring one channel up: 500 kbit/s, 80 % sample point
+sudo ip link set can0 down
+sudo ip link set can0 type can bitrate 500000 sample-point 0.8
+sudo ip link set can0 up
+ip -details -details link show can0        # the timing the kernel negotiated
+
+# classic frames, both directions
+candump can1 &                             # listen on the peer
+cansend can0 100#1122334455667788          # transmit from the device
+
+# CAN-FD with BRS: 500 kbit/s arbitration, 2 Mbit/s data, 80 % in both
+sudo ip link set can0 type can bitrate 500000 sample-point 0.8 \
+                             dbitrate 2000000 dsample-point 0.8 fd on
+cansend can0 300##1AABBCCDDEEFF00112233445566778899AABBCCDD
+
+# controller internal loopback: no bus, no second node - frame forwarding alone
+sudo ip link set can0 type can loopback on
+candump can0 & cansend can0 100#1122334455667788
+
+# terminator, as the host sees it (the interface must be down; reset leaves them off)
+sudo ip link set can0 down
+sudo ip link set can0 type can termination 120     # or 0
+
+# what the hardware actually holds, and what went wrong
+ip -details -details link show can0        # NBTP/DBTP: prop-seg, phase-seg, sjw, sample point
+ip -details -statistics link show can0     # re-started / error-warn / error-pass / bus-off, TEC/REC
+candump -e "can0,#FFFFFFFF"                # error frames, while transmitting
+```
+
+Never send and listen within the same step: SocketCAN's local TX loopback never touches the wire, so a
+`candump` that runs while `cansend` runs on the *same* interface would "receive" frames that no other node
+ever saw. A clean bus shows `error-warn` / `error-pass` / `bus-off` / `re-started` at zero and no
+`ERRORFRAME` lines at all.
+
+> Host gotcha worth remembering: `candump -e canX` does **not** arm the kernel's `CAN_RAW_ERR_FILTER` — `-e`
+> only selects the output format, so error frames never reach the socket. Use `candump "canX,#FFFFFFFF"` to
+> actually see them.
