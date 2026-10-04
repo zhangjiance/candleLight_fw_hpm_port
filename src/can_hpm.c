@@ -91,14 +91,15 @@ void can_init(can_data_t *channel, FDCAN_GlobalTypeDef *instance)
     memset(&channel->channel, 0, sizeof(channel->channel));
 
     channel->channel.Instance = instance;
-    channel->channel.Init.NominalPrescaler = 8U;
-    channel->channel.Init.NominalSyncJumpWidth = 1U;
-    channel->channel.Init.NominalTimeSeg1 = 13U;
-    channel->channel.Init.NominalTimeSeg2 = 2U;
-    channel->channel.Init.DataPrescaler = 2U;
+
+    channel->channel.Init.NominalPrescaler = 1U;
+    channel->channel.Init.NominalSyncJumpWidth = 16U;
+    channel->channel.Init.NominalTimeSeg1 = 127U;
+    channel->channel.Init.NominalTimeSeg2 = 32U;
+    channel->channel.Init.DataPrescaler = 1U;
     channel->channel.Init.DataSyncJumpWidth = 4U;
-    channel->channel.Init.DataTimeSeg1 = 15U;
-    channel->channel.Init.DataTimeSeg2 = 4U;
+    channel->channel.Init.DataTimeSeg1 = 31U;
+    channel->channel.Init.DataTimeSeg2 = 8U;
     channel->channel.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
     channel->channel.Init.Mode = FDCAN_MODE_NORMAL;
     channel->channel.Init.AutoRetransmission = 1U;
@@ -190,6 +191,10 @@ void can_enable(can_data_t *channel, uint32_t mode)
     cfg.ram_config.std_filter_elem_count = 0U;
     cfg.ram_config.enable_ext_filter = false;
     cfg.ram_config.ext_filter_elem_count = 0U;
+
+    cfg.ram_config.txbuf_dedicated_txbuf_elem_count = 0U;
+    cfg.ram_config.txbuf_fifo_or_queue_elem_count = MCAN_TXBUF_SIZE_CANFD_DEFAULT;
+    cfg.ram_config.txfifo_or_txqueue_mode = MCAN_TXBUF_OPERATION_MODE_QUEUE;
     cfg.all_filters_config.std_id_filter_list.mcan_filter_elem_count = 0U;
     cfg.all_filters_config.ext_id_filter_list.mcan_filter_elem_count = 0U;
 
@@ -294,8 +299,6 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
 {
     FDCAN_GlobalTypeDef *base = channel->channel.Instance;
     mcan_tx_frame_t tx;
-    uint32_t txfqs;
-    uint32_t index;
     uint32_t len;
 
     memset(&tx, 0, sizeof(tx));
@@ -323,18 +326,9 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
         memcpy(tx.data_8, frame->canfd->data, len);
     }
 
-    /* Pick a free TX buffer from the TX FIFO/queue. */
-    txfqs = base->TXFQS;
-    if ((txfqs & MCAN_TXFQS_TFQF_MASK) != 0U) {
-        return false; /* TX buffer full, caller retries later */
-    }
-    index = MCAN_TXFQS_TFQPI_GET(txfqs);
-
-    if (mcan_write_txbuf(base, index, &tx) != status_success) {
+    if (mcan_transmit_via_txfifo_nonblocking(base, &tx, NULL) != status_success) {
         return false;
     }
-
-    base->TXBAR = (1UL << index);
 
     return true;
 }
@@ -345,7 +339,9 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
 uint32_t can_get_error_status(can_data_t *channel)
 {
     /* Nothing to reset: the hardware clears LEC on read. */
-    return channel->channel.Instance->PSR;
+    uint32_t psr = channel->channel.Instance->PSR;
+
+    return psr;
 }
 
 void can_manage_bus_off_recovery(can_data_t *channel, uint32_t err)
@@ -371,10 +367,10 @@ void can_manage_bus_off_recovery(can_data_t *channel, uint32_t err)
 
 bool can_has_error_status_changed(uint32_t last_err, uint32_t curr_err)
 {
+    uint8_t last_lec = (uint8_t)MCAN_PSR_LEC_GET(last_err);
     uint8_t curr_lec = (uint8_t)MCAN_PSR_LEC_GET(curr_err);
 
-    if ((0x0U != curr_lec) && (0x7U != curr_lec)) {
-        /* An error is being reported in the last error code field. */
+    if (curr_lec != last_lec) {
         return true;
     }
 

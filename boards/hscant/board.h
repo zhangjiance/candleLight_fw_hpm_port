@@ -172,6 +172,7 @@ void board_init_led_pins(void);
 void board_init_usb(USB_Type *ptr);
 void board_led_write(uint8_t state);
 void board_led_toggle(void);
+void board_can_set_termination(uint8_t channel, uint8_t on);
 void board_init_console(void);
 void board_init_uart(UART_Type *ptr);
 uint32_t board_init_spi_clock(SPI_Type *ptr);

@@ -305,6 +305,17 @@ void board_led_toggle(void) {
                   BOARD_LED_GPIO_PIN);
 }
 
+void board_can_set_termination(uint8_t channel, uint8_t on) {
+  static const uint8_t res_pin[4] = { 15U, 14U, 12U, 11U };
+
+  if (channel >= 4U) {
+    return;
+  }
+
+  gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOB, res_pin[channel],
+                 (on != 0U) ? 1U : 0U);
+}
+
 void board_init_uart(UART_Type *ptr) {
   /* configure uart's pin before opening uart's clock */
   init_uart_pins(ptr);

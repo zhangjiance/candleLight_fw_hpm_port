@@ -18,17 +18,80 @@
 #include "board_layout.h" /* candleLight's board abstraction, to be filled in */
 #include "can.h"
 #include "config.h"
+#include "gpio.h"
 #include "hal_include.h"
 
 #include "hpm_soc.h"
 #include "board.h"          /* the board package */
 #include "board_contract.h" /* required macros + compile time checks */
 #include "hpm_clock_drv.h"
+#include "hpm_common.h"
+#include "hpm_mcan_drv.h"
 
 static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan);
 
 /* MCAN instances wired on this board, from the board package. */
 static MCAN_Type *const s_can_instances[BOARD_CAN_COUNT] = { BOARD_CAN_INSTANCES };
+
+#if defined(MCAN_SOC_MSG_BUF_IN_AHB_RAM) && (MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1)
+ATTR_PLACE_AT(".ahb_sram") static uint32_t s_mcan_msg_buf[BOARD_CAN_COUNT][MCAN_MSG_BUF_SIZE_IN_WORDS];
+
+static void board_mcan_msg_buf_init(void)
+{
+    for (uint32_t i = 0U; i < BOARD_CAN_COUNT; i++) {
+        mcan_msg_buf_attr_t attr;
+
+        attr.ram_base = (uint32_t)&s_mcan_msg_buf[i][0];
+        attr.ram_size = sizeof(s_mcan_msg_buf[i]);
+        (void)mcan_set_msg_buf_attr(s_can_instances[i], &attr);
+    }
+}
+#else
+static void board_mcan_msg_buf_init(void)
+{
+}
+#endif
+
+#ifdef TERM_Pin
+static uint32_t s_termination;
+
+static void board_termination_set(can_data_t *channel, enum gs_can_termination_state state)
+{
+    board_can_set_termination((uint8_t)channel->nr,
+                              (state == GS_CAN_TERMINATION_STATE_ON) ? 1U : 0U);
+}
+
+enum gs_can_termination_state set_term(can_data_t *channel, enum gs_can_termination_state state)
+{
+    uint8_t nr = (uint8_t)channel->nr;
+
+    if (config.termination_set == NULL) {
+        return GS_CAN_TERMINATION_UNSUPPORTED;
+    }
+
+    if (state == GS_CAN_TERMINATION_STATE_ON) {
+        s_termination |= (1UL << (nr & 31U));
+    } else if (state == GS_CAN_TERMINATION_STATE_OFF) {
+        s_termination &= ~(1UL << (nr & 31U));
+    } else {
+        return GS_CAN_TERMINATION_UNSUPPORTED;
+    }
+
+    config.termination_set(channel, state);
+
+    return state;
+}
+
+enum gs_can_termination_state get_term(can_data_t *channel)
+{
+    if (config.termination_set == NULL) {
+        return GS_CAN_TERMINATION_UNSUPPORTED;
+    }
+
+    return (((s_termination >> ((uint8_t)channel->nr & 31U)) & 1UL) != 0UL) ?
+           GS_CAN_TERMINATION_STATE_ON : GS_CAN_TERMINATION_STATE_OFF;
+}
+#endif
 
 struct BoardConfig config = {
     .setup = board_setup,
@@ -36,7 +99,11 @@ struct BoardConfig config = {
      * at boot.  Wire these up (and the termination GPIO) if a board provides
      * switchable power / termination. */
     .phy_power_set = NULL,
+#ifdef TERM_Pin
+    .termination_set = board_termination_set,
+#else
     .termination_set = NULL,
+#endif
     .mainloop_callback = NULL,
     /* channels[] is deliberately left zero initialized and filled in by
      * board_setup(), so this file stays correct for any NUM_CAN_CHANNEL.
@@ -65,24 +132,13 @@ __attribute__((weak)) uint32_t board_init_can_clock(MCAN_Type *ptr)
     return 0U;
 }
 
-static void board_mainloop(void)
-{
-#if BOARD_HAS_SYS_LED
-    static uint32_t next_toggle = 0U;
-    uint32_t now = HAL_GetTick();
-
-    if ((int32_t)(now - next_toggle) >= 0) {
-        next_toggle = now + 500U;
-        board_led_toggle();
-    }
-#endif
-}
-
 static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
 {
     unsigned int count;
 
     (void)hcan;
+
+    board_mcan_msg_buf_init();
 
     count = (NUM_CAN_CHANNEL < BOARD_CAN_COUNT) ? NUM_CAN_CHANNEL : BOARD_CAN_COUNT;
 
@@ -96,5 +152,4 @@ static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
         (void)board_init_can_clock(instance);
     }
 
-    config.mainloop_callback = board_mainloop;
 }
