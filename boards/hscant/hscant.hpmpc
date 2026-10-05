@@ -1,15 +1,15 @@
 {
-  "clientKey": "96238c8e76a37304a2bd700ce2a83d6e",
-  "secretKey": "4dc2a33bec9ab5ea2330727018391ac4",
+  "clientKey": "f20104eb42e4e48ae154b8099527bdb7",
+  "secretKey": "cda40f3a458de98dd3a63d4da1e692dd",
   "content": {
-    "pid": "f91b0020-6adf-4c38-bb5b-4036346559c3",
+    "pid": "8badcdaa-a943-4a77-8a81-c90743870c3f",
     "info": {
       "projectName": "hscant.hpmpc",
       "sdkName": "1.12.0",
       "socName": "HPM5321",
       "packageName": "QFN48",
       "createTime": 1790389521284,
-      "updateTime": 1790415126835,
+      "updateTime": 1791185377471,
       "vscodePid": "b2ad90af-d7a1-4efb-a51f-d385b207edf9"
     },
     "pinmux": {
@@ -32,8 +32,8 @@
               "signal": "GPIO.A.B[11]",
               "padCtls": {}
             },
-            "PA03": {
-              "signal": "GPIO.A.A[03]",
+            "PA02": {
+              "signal": "GPIO.A.A[02]",
               "padCtls": {}
             }
           },
@@ -63,7 +63,7 @@
                 "gpioControllerHide": "[\"1\"]",
                 "outputLevel": "0"
               },
-              "PA03": {
+              "PA02": {
                 "direction": "0",
                 "gpioController": "2",
                 "gpioControllerHide": "[]"
@@ -184,7 +184,8 @@
         "PB14": "CAN1_RES",
         "PB12": "CAN2_RES",
         "PB11": "CAN3_RES",
-        "PA03": "BTN"
+        "PA03": "BTN",
+        "PA02": "USER_BTN"
       },
       "sorter": [
         "init_mcan0_pins",

@@ -24,7 +24,7 @@
 #define CAN1_RES IOC_PAD_PB14
 #define CAN2_RES IOC_PAD_PB12
 #define CAN3_RES IOC_PAD_PB11
-#define BTN IOC_PAD_PA03
+#define USER_BTN IOC_PAD_PA02
 
 void init_mcan0_pins(void)
 {
@@ -94,10 +94,10 @@ void init_gpio_pins(void)
     gpio_set_pin_output(HPM_FGPIO, GPIO_OE_GPIOB, 11);
     gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOB, 11, 0);
 
-    HPM_IOC->PAD[BTN].FUNC_CTL = IOC_PA03_FUNC_CTL_GPIO_A_03;
+    HPM_IOC->PAD[USER_BTN].FUNC_CTL = IOC_PA02_FUNC_CTL_GPIO_A_02;
 
-    gpiom_set_pin_controller(HPM_GPIOM, GPIOM_ASSIGN_GPIOA, 3, gpiom_core0_fast);
-    gpio_set_pin_input(HPM_FGPIO, GPIO_OE_GPIOA, 3);
+    gpiom_set_pin_controller(HPM_GPIOM, GPIOM_ASSIGN_GPIOA, 2, gpiom_core0_fast);
+    gpio_set_pin_input(HPM_FGPIO, GPIO_OE_GPIOA, 2);
 }
 
 void init_spi1_pins(void)

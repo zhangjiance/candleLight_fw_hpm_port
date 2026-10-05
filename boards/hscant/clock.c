@@ -18,6 +18,43 @@
 
 void init_board_clock(void)
 {
+    clock_add_to_group(clock_cpu0, 0);
+
+    clock_add_to_group(clock_can0, 0);
+
+    clock_add_to_group(clock_can1, 0);
+
+    clock_add_to_group(clock_can2, 0);
+
+    clock_add_to_group(clock_can3, 0);
+
+    clock_add_to_group(clock_gptmr3, 0);
+
+    clock_add_to_group(clock_spi1, 0);
+
+    clock_add_to_group(clock_uart0, 0);
+
+    clock_add_to_group(clock_gpio, 0);
+
+    clock_add_to_group(clock_usb0, 0);
+
+    clock_add_to_group(clock_lmm0, 0);
+
+    clock_add_to_group(clock_xpi0, 0);
+
+    clock_add_to_group(clock_rom, 0);
+
+    clock_add_to_group(clock_mchtmr0, 0);
+
+    clock_add_to_group(clock_ptpc, 0);
+
+    clock_add_to_group(clock_ahb, 0);
+
+    clock_add_to_group(clock_hdma, 0);
+}
+
+void init_board_clock_source(void)
+{
     /* Generate pll0 code */
     pllctlv2_init_pll_with_freq(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL0, 960000000);
 
@@ -28,16 +65,16 @@ void init_board_clock(void)
     pllctlv2_set_postdiv(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL0, pllctlv2_clk0, pllctlv2_div_1p0);
 
     /*
-     * Set PLL0CLK1 800M
+     * Set PLL0CLK1 600M
      * Generate clk1_pll0 code
      */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL0, pllctlv2_clk1, pllctlv2_div_1p2);
+    pllctlv2_set_postdiv(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL0, pllctlv2_clk1, pllctlv2_div_1p6);
 
     /*
-     * Set PLL0CLK2 533.333M
+     * Set PLL0CLK2 400M
      * Generate clk2_pll0 code
      */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL0, pllctlv2_clk2, pllctlv2_div_1p8);
+    pllctlv2_set_postdiv(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL0, pllctlv2_clk2, pllctlv2_div_2p4);
 
     /* Generate pll1 code */
     pllctlv2_set_pll_with_mfi_mfn(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL1, 33, 80000000);
@@ -117,43 +154,10 @@ void init_board_clock(void)
     /* Generate clk_top_urt0 code */
     clock_set_source_divider(clock_uart0, clk_src_pll1_clk0, 10);
 
-    /* Generate clk_top_xpi0 code */
-    clock_set_source_divider(clock_xpi0, clk_src_pll1_clk1, 2);
+    /* clk_top_xpi0 is intentionally left at the boot configuration: this image
+     * executes XIP from the XPI0 NOR flash, so changing its clock source would
+     * cut off the instruction fetch. */
 
     /* Generate clk_top_mct0 code */
     clock_set_source_divider(clock_mchtmr0, clk_src_osc24m, 1);
-
-    clock_add_to_group(clock_cpu0, 0);
-
-    clock_add_to_group(clock_can0, 0);
-
-    clock_add_to_group(clock_can1, 0);
-
-    clock_add_to_group(clock_can2, 0);
-
-    clock_add_to_group(clock_can3, 0);
-
-    clock_add_to_group(clock_gptmr3, 0);
-
-    clock_add_to_group(clock_spi1, 0);
-
-    clock_add_to_group(clock_uart0, 0);
-
-    clock_add_to_group(clock_gpio, 0);
-
-    clock_add_to_group(clock_usb0, 0);
-
-    clock_add_to_group(clock_lmm0, 0);
-
-    clock_add_to_group(clock_xpi0, 0);
-
-    clock_add_to_group(clock_rom, 0);
-
-    clock_add_to_group(clock_mchtmr0, 0);
-
-    clock_add_to_group(clock_ptpc, 0);
-
-    clock_add_to_group(clock_ahb, 0);
-
-    clock_add_to_group(clock_hdma, 0);
 }

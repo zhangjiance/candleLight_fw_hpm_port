@@ -5,6 +5,7 @@
  */
 
 #include "board.h"
+#include "clock.h"
 #include "hpm_clock_drv.h"
 #include "hpm_gpio_drv.h"
 #include "hpm_gptmr_drv.h"
@@ -184,7 +185,8 @@ void board_init_usb_dp_dm_pins(void) {
   }
 }
 
-void board_init_clock(void) {
+void board_init_clock(void)
+{
     uint32_t cpu0_freq = clock_get_frequency(clock_cpu0);
 
     if (cpu0_freq == PLLCTL_SOC_PLL_REFCLK_FREQ) {
@@ -196,34 +198,26 @@ void board_init_clock(void) {
     }
 
     /* group0[0] */
-    clock_add_to_group(clock_cpu0, 0);
-    clock_add_to_group(clock_ahb, 0);
-    clock_add_to_group(clock_lmm0, 0);
-    clock_add_to_group(clock_mchtmr0, 0);
-    clock_add_to_group(clock_rom, 0);
-    clock_add_to_group(clock_gpio, 0);
-    clock_add_to_group(clock_hdma, 0);
-    clock_add_to_group(clock_xpi0, 0);
-    
+    init_board_clock();
+
     /* Connect Group0 to CPU0 */
     clock_connect_group_to_cpu(0, 0);
 
+    /* Note: When using an external DCDC, don't set the internal DCDC voltage. The following call of pcfg_dcdc_set_voltage() function should be commented out. */
     /* Bump up DCDC voltage to 1275mv */
     pcfg_dcdc_set_voltage(HPM_PCFG, 1275);
 
     /* Configure CPU to 480MHz, AXI/AHB to 160MHz */
     sysctl_config_cpu0_domain_clock(HPM_SYSCTL, clock_source_pll0_clk0, 2, 3);
     /* Configure PLL0 Post Divider */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, pllctlv2_pll0, pllctlv2_clk0, pllctlv2_div_1p0);    /* PLL0CLK0: 960MHz */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, pllctlv2_pll0, pllctlv2_clk1, pllctlv2_div_1p6);    /* PLL0CLK1: 600MHz */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, pllctlv2_pll0, pllctlv2_clk2, pllctlv2_div_2p4);    /* PLL0CLK2: 400MHz */
+    /* PLL0CLK0: 960MHz */
+    /* PLL0CLK1: 600MHz */
+    /* PLL0CLK2: 400MHz */
     /* Configure PLL0 Frequency to 960MHz */
-    pllctlv2_init_pll_with_freq(HPM_PLLCTLV2, pllctlv2_pll0, 960000000);
+    /* Configure mchtmr to 24MHz */
+    init_board_clock_source();
 
     clock_update_core_clock();
-
-    /* Configure mchtmr to 24MHz */
-    clock_set_source_divider(clock_mchtmr0, clk_src_osc24m, 1);
 }
 
 void board_delay_us(uint32_t us) { clock_cpu_delay_us(us); }
@@ -354,6 +348,30 @@ uint32_t board_init_uart_clock(UART_Type *ptr) {
   } else if (ptr == HPM_UART2) {
     clock_add_to_group(clock_uart2, 0);
     freq = clock_get_frequency(clock_uart2);
+  }
+
+  return freq;
+}
+
+uint32_t board_init_can_clock(MCAN_Type *ptr) {
+  uint32_t freq = 0U;
+
+  if (ptr == HPM_MCAN0) {
+    clock_add_to_group(clock_can0, 0);
+    clock_set_source_divider(clock_can0, clk_src_pll1_clk0, 10);
+    freq = clock_get_frequency(clock_can0);
+  } else if (ptr == HPM_MCAN1) {
+    clock_add_to_group(clock_can1, 0);
+    clock_set_source_divider(clock_can1, clk_src_pll1_clk0, 10);
+    freq = clock_get_frequency(clock_can1);
+  } else if (ptr == HPM_MCAN2) {
+    clock_add_to_group(clock_can2, 0);
+    clock_set_source_divider(clock_can2, clk_src_pll1_clk0, 10);
+    freq = clock_get_frequency(clock_can2);
+  } else if (ptr == HPM_MCAN3) {
+    clock_add_to_group(clock_can3, 0);
+    clock_set_source_divider(clock_can3, clk_src_pll1_clk0, 10);
+    freq = clock_get_frequency(clock_can3);
   }
 
   return freq;

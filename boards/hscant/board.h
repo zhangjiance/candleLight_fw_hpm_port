@@ -30,14 +30,12 @@
  * ------------------------------------------------------------------ */
 #define BOARD_CAN_COUNT     4
 #define BOARD_CAN_INSTANCES HPM_MCAN0, HPM_MCAN1, HPM_MCAN2, HPM_MCAN3
-#define BOARD_CAN_CLOCKS    clock_can0, clock_can1, clock_can2, clock_can3
 #define BOARD_USB_BASE      HPM_USB0
 #define BOARD_USB_IRQn      IRQn_USB0
 #define BOARD_HAS_SYS_LED   1 /* GPIOB[10], active high */
 
-/* clock.c already sets clk_can0..3 to clk_src_pll1_clk0 / 10 and adds them to
- * group 0, so the port layer's generic board_init_can_clock() default applies
- * (no board specific clock code needed). */
+/* board_init_can_clock() (board.c) sources clk_can0..3 from clk_src_pll1_clk0,
+ * so board_init_clock() keeps PLL1CLK0 at 800 MHz => 80 MHz CAN clock. */
 
 /* dma section */
 #define BOARD_APP_HDMA HPM_HDMA
@@ -110,7 +108,7 @@
 /* User button */
 #define BOARD_APP_GPIO_CTRL HPM_FGPIO
 #define BOARD_APP_GPIO_INDEX GPIO_DI_GPIOA
-#define BOARD_APP_GPIO_PIN 3
+#define BOARD_APP_GPIO_PIN 2
 #define BOARD_APP_GPIO_IRQ IRQn_GPIO0_A
 #define BOARD_BUTTON_PRESSED_VALUE 1
 
@@ -191,6 +189,7 @@ uint8_t board_get_led_gpio_off_level(void);
 void board_init_pmp(void);
 
 uint32_t board_init_uart_clock(UART_Type *ptr);
+uint32_t board_init_can_clock(MCAN_Type *ptr);
 
 void board_init_gptmr_channel_pin(GPTMR_Type *ptr, uint32_t channel,
                                   bool as_comp);

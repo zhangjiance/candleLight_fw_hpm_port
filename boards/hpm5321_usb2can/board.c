@@ -5,6 +5,7 @@
  */
 
 #include "board.h"
+#include "clock.h"
 #include "hpm_uart_drv.h"
 #include "hpm_sdk_version.h"
 #include "hpm_gptmr_drv.h"
@@ -213,46 +214,26 @@ void board_init_clock(void)
     }
 
     /* group0[0] */
-    clock_add_to_group(clock_cpu0, 0);
-    clock_add_to_group(clock_ahb, 0);
-    clock_add_to_group(clock_lmm0, 0);
-    clock_add_to_group(clock_mchtmr0, 0);
-    clock_add_to_group(clock_rom, 0);
-    clock_add_to_group(clock_mot0, 0);
-    clock_add_to_group(clock_gpio, 0);
-    clock_add_to_group(clock_hdma, 0);
-    clock_add_to_group(clock_xpi0, 0);
-    clock_add_to_group(clock_ptpc, 0);
+    init_board_clock();
 
     /* Connect Group0 to CPU0 */
     clock_connect_group_to_cpu(0, 0);
 
+    /* Note: When using an external DCDC, don't set the internal DCDC voltage. The following call of pcfg_dcdc_set_voltage() function should be commented out. */
     /* Bump up DCDC voltage to 1275mv */
     pcfg_dcdc_set_voltage(HPM_PCFG, 1275);
 
     /* Configure CPU to 480MHz, AXI/AHB to 160MHz */
     sysctl_config_cpu0_domain_clock(HPM_SYSCTL, clock_source_pll0_clk0, 2, 3);
     /* Configure PLL0 Post Divider */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, pllctlv2_pll0, pllctlv2_clk0, pllctlv2_div_1p0);    /* PLL0CLK0: 960MHz */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, pllctlv2_pll0, pllctlv2_clk1, pllctlv2_div_1p6);    /* PLL0CLK1: 600MHz */
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, pllctlv2_pll0, pllctlv2_clk2, pllctlv2_div_2p4);    /* PLL0CLK2: 400MHz */
+    /* PLL0CLK0: 960MHz */
+    /* PLL0CLK1: 600MHz */
+    /* PLL0CLK2: 400MHz */
     /* Configure PLL0 Frequency to 960MHz */
-    pllctlv2_init_pll_with_freq(HPM_PLLCTLV2, pllctlv2_pll0, 960000000);
-
-    /*
-     * PLL1 -> 800 MHz.
-     * board_init_can_clock() sources clk_can0..3 from clk_src_pll1_clk0 / 10,
-     * i.e. it expects PLL1CLK0 to be exactly 800 MHz (=> 80 MHz CAN clock).
-     * hpm_dfu_boot never configures PLL1 because it does not use CAN; the
-     * application does, so it is set up here.
-     */
-    pllctlv2_set_pll_with_mfi_mfn(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL1, 33, 80000000);
-    pllctlv2_set_postdiv(HPM_PLLCTLV2, PLLCTLV2_PLL_PLL1, pllctlv2_clk0, pllctlv2_div_1p0);
+    /* Configure mchtmr to 24MHz */
+    init_board_clock_source();
 
     clock_update_core_clock();
-
-    /* Configure mchtmr to 24MHz */
-    clock_set_source_divider(clock_mchtmr0, clk_src_osc24m, 1);
 }
 
 void board_delay_us(uint32_t us)
@@ -264,6 +245,37 @@ void board_delay_ms(uint32_t ms)
 {
     clock_cpu_delay_ms(ms);
 }
+
+#if !defined(NO_BOARD_TIMER_SUPPORT) || !NO_BOARD_TIMER_SUPPORT
+static board_timer_cb timer_cb;
+SDK_DECLARE_EXT_ISR_M(BOARD_CALLBACK_TIMER_IRQ, board_timer_isr)
+void board_timer_isr(void)
+{
+    if (gptmr_check_status(BOARD_CALLBACK_TIMER, GPTMR_CH_RLD_STAT_MASK(BOARD_CALLBACK_TIMER_CH))) {
+        gptmr_clear_status(BOARD_CALLBACK_TIMER, GPTMR_CH_RLD_STAT_MASK(BOARD_CALLBACK_TIMER_CH));
+        timer_cb();
+    }
+}
+
+void board_timer_create(uint32_t ms, board_timer_cb cb)
+{
+    uint32_t gptmr_freq;
+    gptmr_channel_config_t config;
+
+    timer_cb = cb;
+    gptmr_channel_get_default_config(BOARD_CALLBACK_TIMER, &config);
+
+    init_gptmr3_clock();
+    gptmr_freq = clock_get_frequency(BOARD_CALLBACK_TIMER_CLK_NAME);
+
+    config.reload = gptmr_freq / 1000 * ms;
+    gptmr_channel_config(BOARD_CALLBACK_TIMER, BOARD_CALLBACK_TIMER_CH, &config, false);
+    gptmr_enable_irq(BOARD_CALLBACK_TIMER, GPTMR_CH_RLD_IRQ_MASK(BOARD_CALLBACK_TIMER_CH));
+    intc_m_enable_irq_with_priority(BOARD_CALLBACK_TIMER_IRQ, 1);
+
+    gptmr_start_counter(BOARD_CALLBACK_TIMER, BOARD_CALLBACK_TIMER_CH);
+}
+#endif
 
 void board_init_led_pins(void)
 {

@@ -19,6 +19,7 @@ extern "C" {
 
 void init_board_clock(void);
 void init_board_clock_source(void);
+void init_gptmr3_clock(void);
 
 #ifdef __cplusplus
 }

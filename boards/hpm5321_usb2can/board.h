@@ -157,13 +157,11 @@
  * ------------------------------------------------------------------ */
 #define BOARD_CAN_COUNT     4
 #define BOARD_CAN_INSTANCES HPM_MCAN0, HPM_MCAN1, HPM_MCAN2, HPM_MCAN3
-#define BOARD_CAN_CLOCKS    clock_can0, clock_can1, clock_can2, clock_can3
 #define BOARD_USB_BASE      HPM_USB0
 #define BOARD_USB_IRQn      IRQn_USB0
 
 /* This board provides its own board_init_can_clock() (board.c) because it also
- * programs the CAN clock divider; BOARD_CAN_CLOCKS is still required by the
- * contract and matches that implementation. */
+ * programs the CAN clock divider. */
 
 /* 12V Power Enable for lin transceiver */
 #define BOARD_SUPPORT_LIN_TRANSCEIVER_CONTROL 1
