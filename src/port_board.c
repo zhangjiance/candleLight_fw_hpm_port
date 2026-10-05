@@ -5,14 +5,14 @@
  * This file contains no board specific constants.  Everything comes from the
  * board package through the contract documented in port/board_contract.h:
  *
- *   BOARD_CAN_INSTANCES / BOARD_CAN_COUNT / BOARD_CAN_CLOCKS
- *       the MCAN instances wired on the board and their clock gates
+ *   BOARD_CAN_INSTANCES / BOARD_CAN_COUNT
+ *       the MCAN instances wired on the board
  *   BOARD_HAS_SYS_LED
  *       whether board_led_toggle() drives a real "running" LED
  *   board_init(), board_init_usb(), board_delay_ms(), init_can_pins()
  *       clock tree, pad muxing, USB PHY
  *   board_init_can_clock()
- *       optional: a generic default is provided below as a weak symbol
+ *       board owned CAN clock source/divider
  */
 
 #include "board_layout.h" /* candleLight's board abstraction, to be filled in */
@@ -142,28 +142,6 @@ struct BoardConfig config = {
      * board_setup(), so this file stays correct for any NUM_CAN_CHANNEL.
      * (leds[].port == NULL means "no RX/TX LED wired yet".) */
 };
-
-/*
- * Generic CAN clock default.
- *
- * Most HPM boards let clock.c configure clk_canN (source + divider) and only
- * need the gate enabled, which is exactly what this does.  A board whose CAN
- * clock differs overrides it with a strong definition in its board.c
- * (boards/hpm5321_usb2can does, because it also programs the divider).
- */
-__attribute__((weak)) uint32_t board_init_can_clock(MCAN_Type *ptr)
-{
-    static const clock_name_t clocks[BOARD_CAN_COUNT] = { BOARD_CAN_CLOCKS };
-
-    for (uint32_t i = 0U; i < BOARD_CAN_COUNT; i++) {
-        if (ptr == s_can_instances[i]) {
-            clock_add_to_group(clocks[i], 0U);
-            return clock_get_frequency(clocks[i]);
-        }
-    }
-
-    return 0U;
-}
 
 static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
 {

@@ -24,9 +24,6 @@
  *   BOARD_CAN_COUNT      number of MCAN instances populated on the board
  *   BOARD_CAN_INSTANCES  comma separated MCAN instance list, e.g.
  *                        HPM_MCAN0, HPM_MCAN1, HPM_MCAN2, HPM_MCAN3
- *   BOARD_CAN_CLOCKS     comma separated clock_name_t list, same order as
- *                        BOARD_CAN_INSTANCES, e.g.
- *                        clock_can0, clock_can1, clock_can2, clock_can3
  *   BOARD_USB_BASE       USB device controller instance (e.g. HPM_USB0)
  *   BOARD_USB_IRQn       matching IRQn (e.g. IRQn_USB0)
  *   BOARD_BGPR           retention register used for the DFU reboot request
@@ -39,16 +36,11 @@
  *   void     board_init_usb(USB_Type *ptr);     USB pins, clock, vbus source
  *   void     board_delay_ms(uint32_t ms);
  *   void     init_can_pins(MCAN_Type *ptr);     MCAN pad muxing
- *   void     board_led_toggle(void);            only if BOARD_HAS_SYS_LED == 1
- *
- * Optional functions
- * ------------------
  *   uint32_t board_init_can_clock(MCAN_Type *ptr);
- *       Selects the CAN clock source/divider and returns its frequency.
- *       A generic HPM5xxx default (clk_canN in group 0) is provided as a weak
- *       symbol by src/port_board.c, so boards whose clock.c already configures
- *       clk_canN do not need to implement it.  Override it if the CAN clock
- *       differs from that default (e.g. a different source or divider).
+ *       Selects the CAN clock source/divider (e.g. clk_canN sourced from
+ *       clk_src_pll1_clk0 / 10) and returns its frequency.  Called by the
+ *       port layer for every MCAN instance before can_init().
+ *   void     board_led_toggle(void);            only if BOARD_HAS_SYS_LED == 1
  */
 
 #pragma once
@@ -64,9 +56,6 @@
 #endif
 #ifndef BOARD_CAN_INSTANCES
 #error "board package: BOARD_CAN_INSTANCES is missing (see port/board_contract.h)"
-#endif
-#ifndef BOARD_CAN_CLOCKS
-#error "board package: BOARD_CAN_CLOCKS is missing (see port/board_contract.h)"
 #endif
 #ifndef BOARD_USB_BASE
 #error "board package: BOARD_USB_BASE is missing (see port/board_contract.h)"
@@ -86,6 +75,4 @@ void board_init(void);
 void board_init_usb(USB_Type *ptr);
 void board_delay_ms(uint32_t ms);
 void init_can_pins(MCAN_Type *ptr);
-
-/* --- optional function, weak default in src/port_board.c ------------------ */
 uint32_t board_init_can_clock(MCAN_Type *ptr);
