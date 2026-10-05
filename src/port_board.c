@@ -26,7 +26,11 @@
 #include "board_contract.h" /* required macros + compile time checks */
 #include "hpm_clock_drv.h"
 #include "hpm_common.h"
+#include "hpm_gpio_drv.h"
 #include "hpm_mcan_drv.h"
+
+#include "dfu.h"
+#include "timer.h"
 
 static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan);
 
@@ -93,6 +97,31 @@ enum gs_can_termination_state get_term(can_data_t *channel)
 }
 #endif
 
+/*
+ * Long-press the user button (~500 ms) to request the DFU bootloader.  Called
+ * from the candleLight main loop through config.mainloop_callback; the hold
+ * time is measured with timer_get() so the CAN/USB loop is never blocked.
+ */
+#ifdef BOARD_APP_GPIO_CTRL
+static void board_mainloop_callback(void)
+{
+    static bool btn_held = false;
+    static uint32_t btn_start_us = 0U;
+
+    if (gpio_read_pin(BOARD_APP_GPIO_CTRL, BOARD_APP_GPIO_INDEX,
+                      BOARD_APP_GPIO_PIN) == BOARD_BUTTON_PRESSED_VALUE) {
+        if (!btn_held) {
+            btn_held = true;
+            btn_start_us = timer_get();
+        } else if ((uint32_t)(timer_get() - btn_start_us) >= 500000U) {
+            dfu_run_bootloader();
+        }
+    } else {
+        btn_held = false;
+    }
+}
+#endif
+
 struct BoardConfig config = {
     .setup = board_setup,
     /* The CAN transceivers are left in the state the board package put them in
@@ -104,7 +133,11 @@ struct BoardConfig config = {
 #else
     .termination_set = NULL,
 #endif
+#ifdef BOARD_APP_GPIO_CTRL
+    .mainloop_callback = board_mainloop_callback,
+#else
     .mainloop_callback = NULL,
+#endif
     /* channels[] is deliberately left zero initialized and filled in by
      * board_setup(), so this file stays correct for any NUM_CAN_CHANNEL.
      * (leds[].port == NULL means "no RX/TX LED wired yet".) */

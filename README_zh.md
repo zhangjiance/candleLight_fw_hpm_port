@@ -135,7 +135,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | `usbd_bridge.c` | **兼容层** —— 详见下文 |
 | `can_hpm.c` | `candleLight_fw/src/can/m_can.c` 到 `hpm_mcan_drv` 的移植 |
 | `timer.c` | `timer_get()` = 基于 `mcycle` 的自由运行微秒计数器（不占用外设定时器，可在中断中安全读取） |
-| `dfu_hpm.c` | `dfu_run_bootloader()` —— 写入 BGPR/PDGO magic 后软复位 |
+| `dfu_hpm.c` | `dfu_run_bootloader()` —— 写入 BGPR/PDGO magic 后重新进入 ROM 引导流程 |
 | `port_device.c` | `HAL_Init()` 底层初始化（时钟树、USB PHY、D-Cache 策略）、GPIO 垫片、芯片 UUID 装载 |
 | `port_board.c` | 弱符号默认 `board_init_can_clock()`，填充 `config.channels[].interface` |
 | `usb_config.h` | CherryUSB 配置 |
@@ -254,7 +254,7 @@ candleLight_fw_hpm_port/
 本 APP 链接在 `0x80020000`，其前放置 `.dfu_signature`；引导程序 [`hpm_dfu_boot`](../hpm_dfu_boot) 位于 `0x80000000`。
 
 1. **首次** —— 用调试器 / 烧录器写入 bootloader，之后通过 DFU 烧录本 APP。
-2. **APP → bootloader** —— 上电时按住 Boot 引脚，或由主机在 runtime 接口上发出 DFU `DETACH` 请求。APP 会置位 `dfu_detach_requested`，`main.c` 调用 `dfu_run_bootloader()`：向保留寄存器写入 magic 后复位 SoC，bootloader 读到该 magic 便停留在 DFU 模式。
+2. **APP → bootloader** —— 上电时按住 Boot 引脚、长按用户按键约 500 ms，或由主机在 runtime 接口上发出 DFU `DETACH` 请求。APP 调用 `dfu_run_bootloader()`：向保留寄存器写入 magic 后重新进入 ROM 引导流程，bootloader 读到该 magic 便停留在 DFU 模式。
 3. **下载** —— bootloader 以 HPMicro 的 VID（`0x34b7`）枚举。
 
 bootloader 与 APP 在 Windows 下都通过 WCID 免驱，无需 Zadig、无需厂商 INF：

@@ -135,7 +135,7 @@ Contains **no hardware code**, only contracts and shims:
 | `usbd_bridge.c` | **the compatibility layer** — see below |
 | `can_hpm.c` | port of `candleLight_fw/src/can/m_can.c` onto `hpm_mcan_drv` |
 | `timer.c` | `timer_get()` = free-running µs counter on `mcycle` (no peripheral timer consumed, safe from interrupts) |
-| `dfu_hpm.c` | `dfu_run_bootloader()` — writes the BGPR/PDGO magic, then a software reset |
+| `dfu_hpm.c` | `dfu_run_bootloader()` — writes the BGPR/PDGO magic, then re-enters the ROM boot flow |
 | `port_device.c` | `HAL_Init()` bring-up (clock tree, USB PHY, D-cache policy), GPIO shim, chip UUID loader |
 | `port_board.c` | weak default `board_init_can_clock()`, fills `config.channels[].interface` |
 | `usb_config.h` | CherryUSB configuration |
@@ -262,7 +262,7 @@ candleLight_fw_hpm_port/
 The application is linked at `0x80020000` behind a `.dfu_signature`; the bootloader [`hpm_dfu_boot`](../hpm_dfu_boot) lives at `0x80000000`.
 
 1. **First time** — write the bootloader with a debugger / flasher, then flash this application through DFU.
-2. **Application → bootloader** — either hold the boot pin at power-on, or have the host issue a DFU `DETACH` request on the runtime interface. The application sets `dfu_detach_requested`, `main.c` calls `dfu_run_bootloader()`, which writes a magic value to a retention register and resets the SoC; the bootloader sees the magic and stays in DFU mode.
+2. **Application → bootloader** — hold the boot pin at power-on, long-press the user button for ~500 ms, or have the host issue a DFU `DETACH` request on the runtime interface. The application calls `dfu_run_bootloader()`, which writes a magic value to a retention register and re-enters the ROM boot flow; the bootloader sees the magic and stays in DFU mode.
 3. **Download** — the bootloader enumerates under the HPMicro VID (`0x34b7`).
 
 Both the bootloader and the application are driver-less on Windows via WCID, so no Zadig and no vendor INF are needed:
