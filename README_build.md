@@ -132,7 +132,7 @@ cmake --list-presets
 
 Both flavours are **application images** (not standalone firmware), linked at `0x80020000` behind a 4-byte signature and started by a bootloader at `0x80000000`. They differ in the signature and in how the application requests the bootloader:
 
-- **`flash_dfu`** — carries a `.dfu_signature` and is started by [`hpm_dfu_boot`](../hpm_dfu_boot). The application requests DFU mode through a retention-register magic (`src/dfu_hpm.c`).
+- **`flash_dfu`** — carries a `.dfu_signature` and is started by [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git). The application requests DFU mode through a retention-register magic (`src/dfu_hpm.c`).
 - **`flash_uf2`** — carries a `.uf2_signature` (`BOARD_UF2_SIGNATURE = 0x0A4D5048`) and is started by a UF2/MSC bootloader (the stock one shipped on the device). The build also emits `<APP_NAME>.uf2` (family `0x0A4D5048`, base `0x80020000`) through `tools/uf2conv.py`, ready to be dropped onto the exposed MSC volume. The application requests the bootloader by setting `keep_bootloader` in the shared `bl_setting` block (`src/bl_setting.c`) and re-entering the ROM boot flow (`ROM_API_TABLE_ROOT->run_bootloader`).
 
 Each flavour pairs with a different bootloader:

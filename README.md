@@ -259,7 +259,7 @@ candleLight_fw_hpm_port/
 
 ## Flashing and DFU
 
-The application is linked at `0x80020000` behind a `.dfu_signature`; the bootloader [`hpm_dfu_boot`](../hpm_dfu_boot) lives at `0x80000000`.
+The application is linked at `0x80020000` behind a `.dfu_signature`; the bootloader [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) lives at `0x80000000`.
 
 1. **First time** — write the bootloader with a debugger / flasher, then flash this application through DFU.
 2. **Application → bootloader** — hold the boot pin at power-on, long-press the user button for ~500 ms, or have the host issue a DFU `DETACH` request on the runtime interface. The application calls `dfu_run_bootloader()`, which writes a magic value to a retention register and re-enters the ROM boot flow; the bootloader sees the magic and stays in DFU mode.

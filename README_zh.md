@@ -251,7 +251,7 @@ candleLight_fw_hpm_port/
 
 ## 烧录与 DFU
 
-本 APP 链接在 `0x80020000`，其前放置 `.dfu_signature`；引导程序 [`hpm_dfu_boot`](../hpm_dfu_boot) 位于 `0x80000000`。
+本 APP 链接在 `0x80020000`，其前放置 `.dfu_signature`；引导程序 [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 位于 `0x80000000`。
 
 1. **首次** —— 用调试器 / 烧录器写入 bootloader，之后通过 DFU 烧录本 APP。
 2. **APP → bootloader** —— 上电时按住 Boot 引脚、长按用户按键约 500 ms，或由主机在 runtime 接口上发出 DFU `DETACH` 请求。APP 调用 `dfu_run_bootloader()`：向保留寄存器写入 magic 后重新进入 ROM 引导流程，bootloader 读到该 magic 便停留在 DFU 模式。

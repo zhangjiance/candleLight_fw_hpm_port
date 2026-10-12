@@ -130,7 +130,7 @@ cmake --list-presets
 
 两者都是**应用程序镜像**（不是独立固件），均链接在 `0x80020000`，前面有 4 字节签名，由位于 `0x80000000` 的引导程序启动；区别在于签名与「请求引导程序」的方式：
 
-- **`flash_dfu`** —— 携带 `.dfu_signature`，由 [`hpm_dfu_boot`](../hpm_dfu_boot) 启动。APP 通过保留寄存器写入 magic 请求进入 DFU 模式（`src/dfu_hpm.c`）。
+- **`flash_dfu`** —— 携带 `.dfu_signature`，由 [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 启动。APP 通过保留寄存器写入 magic 请求进入 DFU 模式（`src/dfu_hpm.c`）。
 - **`flash_uf2`** —— 携带 `.uf2_signature`（`BOARD_UF2_SIGNATURE = 0x0A4D5048`），由 UF2/MSC 引导程序（设备原版 boot）启动。构建时还会用 `tools/uf2conv.py` 生成 `<APP_NAME>.uf2`（family `0x0A4D5048`、基址 `0x80020000`），可直接拖入 boot 暴露出的 MSC 盘符。APP 通过在共享的 `bl_setting` 块（`src/bl_setting.c`）中置 `keep_bootloader`，再经 ROM 引导流程（`ROM_API_TABLE_ROOT->run_bootloader`）重新进入来请求引导程序。
 
 每个形态搭配不同的 bootloader：
