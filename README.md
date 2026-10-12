@@ -311,8 +311,8 @@ different build of this application:
 
 | Application preset | Signature at `0x80020000` | Pairs with |
 | --- | --- | --- |
-| `*-dfu` (`HPM_BUILD_TYPE=flash_dfu`) | `.dfu_signature` (`0x48504D21`) | the bootloader built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
-| `*-uf2` (`HPM_BUILD_TYPE=flash_uf2`) | `.uf2_signature` (`0x0A4D5048`) | the **original, closed-source** boot of the HSCanT device (UF2/MSC) |
+| `hscant-dfu` (`HPM_BUILD_TYPE=flash_dfu`) | `.dfu_signature` (`0x48504D21`) | the bootloader built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
+| `hscant-uf2` (`HPM_BUILD_TYPE=flash_uf2`) | `.uf2_signature` (`0x0A4D5048`) | the **original, closed-source** boot of the HSCanT device (UF2/MSC) |
 
 **Why this is possible at all.** The HSCanT boot is a derivative of CherryDAP's
 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader).

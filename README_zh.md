@@ -295,8 +295,8 @@ HSCanT 硬件存在两种可能的引导程序，各自搭配本工程不同的�
 
 | 本工程预设 | `0x80020000` 处的签名 | 配套的 boot |
 | --- | --- | --- |
-| `*-dfu`（`HPM_BUILD_TYPE=flash_dfu`） | `.dfu_signature`（`0x48504D21`） | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译出的 bootloader |
-| `*-uf2`（`HPM_BUILD_TYPE=flash_uf2`） | `.uf2_signature`（`0x0A4D5048`） | HSCanT 设备**原版闭源 boot**（UF2/MSC） |
+| `hscant-dfu`（`HPM_BUILD_TYPE=flash_dfu`） | `.dfu_signature`（`0x48504D21`） | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译出的 bootloader |
+| `hscant-uf2`（`HPM_BUILD_TYPE=flash_uf2`） | `.uf2_signature`（`0x0A4D5048`） | HSCanT 设备**原版闭源 boot**（UF2/MSC） |
 
 **为什么可以做到。** HSCanT 的 boot 修改自 CherryDAP 的
 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。

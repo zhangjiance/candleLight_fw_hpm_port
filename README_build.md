@@ -85,60 +85,61 @@ Run the commands **from the repository root**.
 ### 3.1 Configure and build
 
 ```bash
-# HPM5321 USB2CAN dongle
-cmake --preset hpm5321_usb2can-dfu
-cmake --build --preset hpm5321_usb2can-dfu
-
-# HSCanT
+# DFU image (Release) - pairs with the hpm_dfu_boot bootloader
 cmake --preset hscant-dfu
 cmake --build --preset hscant-dfu
+
+# UF2 image (Release) - pairs with the device's stock UF2/MSC boot
+cmake --preset hscant-uf2
+cmake --build --preset hscant-uf2
 ```
 
-Presets are Release by default; every board also has a Debug variant:
+Presets are Release by default; each flavour also has a Debug variant:
 
 ```bash
-cmake --preset hscant-dfu-debug
-cmake --build --preset hscant-dfu-debug
+cmake --preset hscant-uf2-debug
+cmake --build --preset hscant-uf2-debug
 ```
 
 Or drive `ninja` directly:
 
 ```bash
-ninja -C build/hscant-dfu -j8
+ninja -C build/hscant-uf2 -j8
 ```
 
 To force a clean configure (drops the CMake cache but keeps the sources) — handy after switching toolchains:
 
 ```bash
-cmake --preset hscant-dfu --fresh     # needs CMake >= 3.24
+cmake --preset hscant-uf2 --fresh     # needs CMake >= 3.24
 ```
 
 ### 3.2 Supported Boards and Presets
 
 | Board | DFU release | DFU debug | UF2 release | UF2 debug | `BOARD` |
 | --- | --- | --- | --- | --- | --- |
-| HPM5321 USB2CAN dongle | `hpm5321_usb2can-dfu` | `hpm5321_usb2can-dfu-debug` | `hpm5321_usb2can-uf2` | `hpm5321_usb2can-uf2-debug` | `hpm5321_usb2can` |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
 
-`-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`); `-uf2` presets inherit `base-uf2` (`HPM_BUILD_TYPE=flash_uf2`). The `-debug` variants inherit `base-debug` / `base-uf2-debug`. List them with:
+The `hscant-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`); the `hscant-uf2` presets inherit `base-uf2` (`HPM_BUILD_TYPE=flash_uf2`). The `-debug` variants inherit `base-debug` / `base-uf2-debug`. List them with:
 
 ```bash
 cmake --list-presets
 ```
+
+> The `boards/hpm5321_usb2can/` board package is still present but intentionally has **no preset yet** (that platform is untested); configure it manually with `-DBOARD=hpm5321_usb2can -DHPM_BUILD_TYPE=flash_dfu`.
 
 ### 3.3 Boot image flavours
 
 Both flavours are **application images** (not standalone firmware), linked at `0x80020000` behind a 4-byte signature and started by a bootloader at `0x80000000`. They differ in the signature and in how the application requests the bootloader:
 
 - **`flash_dfu`** — carries a `.dfu_signature` and is started by [`hpm_dfu_boot`](../hpm_dfu_boot). The application requests DFU mode through a retention-register magic (`src/dfu_hpm.c`).
-- **`flash_uf2`** — carries a `.uf2_signature` (`BOARD_UF2_SIGNATURE = 0x0A4D5048`) and is started by a UF2/MSC bootloader (the stock one shipped on the device). The build also emits `<APP_NAME>.uf2` (family `0x0A4D5048`, base `0x80020000`) through `tools/uf2conv.py`, ready to be dropped onto the exposed MSC volume. The application requests the bootloader by setting `keep_bootloader` in the shared `bl_setting` block (`src/bl_setting.c`) and resetting.
+- **`flash_uf2`** — carries a `.uf2_signature` (`BOARD_UF2_SIGNATURE = 0x0A4D5048`) and is started by a UF2/MSC bootloader (the stock one shipped on the device). The build also emits `<APP_NAME>.uf2` (family `0x0A4D5048`, base `0x80020000`) through `tools/uf2conv.py`, ready to be dropped onto the exposed MSC volume. The application requests the bootloader by setting `keep_bootloader` in the shared `bl_setting` block (`src/bl_setting.c`) and re-entering the ROM boot flow (`ROM_API_TABLE_ROOT->run_bootloader`).
 
 Each flavour pairs with a different bootloader:
 
 | Preset flavour | Bootloader |
 | --- | --- |
-| `*-dfu` | built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
-| `*-uf2` | the HSCanT device's original, closed-source UF2/MSC boot — a derivative of CherryDAP's [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader). No boot sources are needed to stay compatible with it; the recovered contract is documented in the [main README](README.md#bootloaders-and-image-compatibility). |
+| `hscant-dfu` | built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
+| `hscant-uf2` | the HSCanT device's original, closed-source UF2/MSC boot — a derivative of CherryDAP's [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader). No boot sources are needed to stay compatible with it; the recovered contract is documented in the [main README](README.md#bootloaders-and-image-compatibility). |
 
 `HPM_BUILD_TYPE=flash_xip` (standalone at `0x80000000`) is **not** used by any preset here.
 

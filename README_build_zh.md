@@ -85,42 +85,41 @@ which riscv-none-elf-gcc cmake ninja
 ### 3.1 配置并构建
 
 ```bash
-# HPM5321 USB2CAN dongle
-cmake --preset hpm5321_usb2can-dfu
-cmake --build --preset hpm5321_usb2can-dfu
-
-# HSCanT
+# DFU 镜像（Release）—— 配合 hpm_dfu_boot 引导程序
 cmake --preset hscant-dfu
 cmake --build --preset hscant-dfu
+
+# UF2 镜像（Release）—— 配合设备原版 UF2/MSC boot
+cmake --preset hscant-uf2
+cmake --build --preset hscant-uf2
 ```
 
-预设默认是 Release；每块板子同时提供 Debug 变体：
+预设默认是 Release；每种形态同时提供 Debug 变体：
 
 ```bash
-cmake --preset hscant-dfu-debug
-cmake --build --preset hscant-dfu-debug
+cmake --preset hscant-uf2-debug
+cmake --build --preset hscant-uf2-debug
 ```
 
 或直接用 `ninja` 指定 jobs：
 
 ```bash
-ninja -C build/hscant-dfu -j8
+ninja -C build/hscant-uf2 -j8
 ```
 
 如需强制一次全新配置（丢弃 CMake cache，保留源码）—— 切换工具链后很有用：
 
 ```bash
-cmake --preset hscant-dfu --fresh     # 需要 CMake >= 3.24
+cmake --preset hscant-uf2 --fresh     # 需要 CMake >= 3.24
 ```
 
 ### 3.2 支持的 Board 与 Preset
 
 | Board | DFU Release | DFU Debug | UF2 Release | UF2 Debug | `BOARD` |
 | --- | --- | --- | --- | --- | --- |
-| HPM5321 USB2CAN dongle | `hpm5321_usb2can-dfu` | `hpm5321_usb2can-dfu-debug` | `hpm5321_usb2can-uf2` | `hpm5321_usb2can-uf2-debug` | `hpm5321_usb2can` |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
 
-`-dfu` 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`）；`-uf2` 预设继承 `base-uf2`（`HPM_BUILD_TYPE=flash_uf2`）；`-debug` 变体分别继承 `base-debug` / `base-uf2-debug`。查看全部 preset：
+`hscant-dfu` 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`）；`hscant-uf2` 预设继承 `base-uf2`（`HPM_BUILD_TYPE=flash_uf2`）；`-debug` 变体分别继承 `base-debug` / `base-uf2-debug`。查看全部 preset：
 
 ```bash
 cmake --list-presets
@@ -131,14 +130,16 @@ cmake --list-presets
 两者都是**应用程序镜像**（不是独立固件），均链接在 `0x80020000`，前面有 4 字节签名，由位于 `0x80000000` 的引导程序启动；区别在于签名与「请求引导程序」的方式：
 
 - **`flash_dfu`** —— 携带 `.dfu_signature`，由 [`hpm_dfu_boot`](../hpm_dfu_boot) 启动。APP 通过保留寄存器写入 magic 请求进入 DFU 模式（`src/dfu_hpm.c`）。
-- **`flash_uf2`** —— 携带 `.uf2_signature`（`BOARD_UF2_SIGNATURE = 0x0A4D5048`），由 UF2/MSC 引导程序（设备原版 boot）启动。构建时还会用 `tools/uf2conv.py` 生成 `<APP_NAME>.uf2`（family `0x0A4D5048`、基址 `0x80020000`），可直接拖入 boot 暴露出的 MSC 盘符。APP 通过在共享的 `bl_setting` 块（`src/bl_setting.c`）中置 `keep_bootloader` 并复位来请求引导程序。
+- **`flash_uf2`** —— 携带 `.uf2_signature`（`BOARD_UF2_SIGNATURE = 0x0A4D5048`），由 UF2/MSC 引导程序（设备原版 boot）启动。构建时还会用 `tools/uf2conv.py` 生成 `<APP_NAME>.uf2`（family `0x0A4D5048`、基址 `0x80020000`），可直接拖入 boot 暴露出的 MSC 盘符。APP 通过在共享的 `bl_setting` 块（`src/bl_setting.c`）中置 `keep_bootloader`，再经 ROM 引导流程（`ROM_API_TABLE_ROOT->run_bootloader`）重新进入来请求引导程序。
 
 每个形态搭配不同的 bootloader：
 
 | 预设形态 | 配套 boot |
 | --- | --- |
-| `*-dfu` | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译 |
-| `*-uf2` | HSCanT 设备**原版闭源** UF2/MSC boot —— 修改自 CherryDAP 的 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。没有它的源码也能保持兼容；恢复出的契约见 [主 README](README_zh.md#引导程序与镜像兼容性)。 |
+| `hscant-dfu` | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译 |
+| `hscant-uf2` | HSCanT 设备**原版闭源** UF2/MSC boot —— 修改自 CherryDAP 的 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。没有它的源码也能保持兼容；恢复出的契约见 [主 README](README_zh.md#引导程序与镜像兼容性)。 |
+
+> `boards/hpm5321_usb2can/` 板级包仍然保留，但**暂时没有 preset**（该平台尚未测试）；如需构建请手动指定 `-DBOARD=hpm5321_usb2can -DHPM_BUILD_TYPE=flash_dfu`。
 
 `HPM_BUILD_TYPE=flash_xip`（独立运行于 `0x80000000`）在本工程**没有任何 preset 使用**。
 
