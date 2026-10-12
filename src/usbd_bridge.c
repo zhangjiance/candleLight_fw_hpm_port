@@ -7,8 +7,10 @@
  * by CherryUSB, plus the descriptors.
  *
  * Descriptor notes:
- *  - Two interfaces, exactly like candleLight: 0 = gs_usb vendor class,
- *    1 = DFU runtime class (detach only).
+ *  - Interface 0 = gs_usb vendor class.  flash_dfu images additionally expose
+ *    interface 1 = DFU runtime class (detach only); flash_uf2 images do not,
+ *    because they are started by a UF2/MSC bootloader and there is no DFU
+ *    endpoint to talk to.
  *  - Full-Speed uses 64-byte bulk endpoints, High-Speed 512-byte.
  *  - WCID / Microsoft OS 1.0 descriptors are registered through CherryUSB so
  *    Windows binds WinUSB without a driver.  The byte blobs below mirror the
@@ -36,12 +38,34 @@
 /* ------------------------------------------------------------------ */
 /* Descriptors                                                        */
 /* ------------------------------------------------------------------ */
-#define GSUSB_CFG_LEN 50U
+/*
+ * The DFU runtime interface only exists so that a host can ask the running
+ * application to reboot into a DFU bootloader.  A flash_uf2 image is started by
+ * a UF2/MSC bootloader instead, so it must not advertise one at all.
+ */
+#if defined(FLASH_UF2) && FLASH_UF2
+#define GSUSB_HAS_DFU_RUNTIME 0
+#else
+#define GSUSB_HAS_DFU_RUNTIME 1
+#endif
+
+#if GSUSB_HAS_DFU_RUNTIME
+#define GSUSB_CFG_LEN        50U
+#define GSUSB_NUM_INTERFACES 0x02
+/* Interface 1: DFU runtime + DFU functional descriptor (detach + upload + download) */
+#define GSUSB_DFU_RUNTIME_DESC                                                                     \
+    0x09, 0x04, 0x01, 0x00, 0x00, 0xFE, 0x01, 0x01, DFU_INTERFACE_STR_INDEX,                       \
+    0x09, 0x21, 0x0B, 0xFF, 0x00, 0x00, 0x08, 0x1A, 0x01
+#else
+#define GSUSB_CFG_LEN        32U
+#define GSUSB_NUM_INTERFACES 0x01
+#define GSUSB_DFU_RUNTIME_DESC
+#endif
 
 /* Mirrors candleLight_fw/src/usbd_gs_can.c:USBD_GS_CAN_CfgDesc */
 #define GSUSB_CONFIG_BODY(desc_type, mps_lo, mps_hi)                                              \
     0x09, desc_type, GSUSB_CFG_LEN, 0x00, /* configuration, wTotalLength                  */      \
-        0x02,                             /* bNumInterfaces                              */      \
+        GSUSB_NUM_INTERFACES,             /* bNumInterfaces                              */      \
         0x01,                             /* bConfigurationValue                         */      \
         USBD_IDX_CONFIG_STR,              /* iConfiguration                              */      \
         0x80,                             /* bmAttributes                                */      \
@@ -52,10 +76,7 @@
         0x07, 0x05, GSUSB_ENDPOINT_IN, 0x02, mps_lo, mps_hi, 0x00,                                \
         /* EP 0x02 OUT, bulk */                                                                   \
         0x07, 0x05, GSUSB_ENDPOINT_OUT, 0x02, mps_lo, mps_hi, 0x00,                               \
-        /* Interface 1: DFU runtime */                                                            \
-        0x09, 0x04, 0x01, 0x00, 0x00, 0xFE, 0x01, 0x01, DFU_INTERFACE_STR_INDEX,                  \
-        /* DFU functional descriptor (detach + upload + download) */                              \
-        0x09, 0x21, 0x0B, 0xFF, 0x00, 0x00, 0x08, 0x1A, 0x01
+        GSUSB_DFU_RUNTIME_DESC
 
 static const uint8_t config_descriptor_fs[] = { GSUSB_CONFIG_BODY(0x02, 0x40, 0x00) };
 static const uint8_t config_descriptor_hs[] = { GSUSB_CONFIG_BODY(0x02, 0x00, 0x02) };
@@ -131,6 +152,7 @@ static const uint8_t g_msos_string[] = {
 };
 
 static const uint8_t g_msos_compat_id[] = {
+#if GSUSB_HAS_DFU_RUNTIME
     0x40, 0x00, 0x00, 0x00, /* dwLength */
     0x00, 0x01,             /* bcdVersion 1.0 */
     0x04, 0x00,             /* wIndex 0x0004 */
@@ -144,6 +166,17 @@ static const uint8_t g_msos_compat_id[] = {
     0x01, 0x01, 0x57, 0x49, 0x4E, 0x55, 0x53, 0x42, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+#else
+    0x28, 0x00, 0x00, 0x00, /* dwLength: one function */
+    0x00, 0x01,             /* bcdVersion 1.0 */
+    0x04, 0x00,             /* wIndex 0x0004 */
+    0x01,                   /* bCount: gs_usb only */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    /* function 0 */
+    0x00, 0x01, 0x57, 0x49, 0x4E, 0x55, 0x53, 0x42, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+#endif
 };
 
 static const uint8_t g_msos_ext_prop[] = {
@@ -180,18 +213,23 @@ static const uint8_t g_msos_ext_prop_empty[] = {
     0x00, 0x00,
 };
 
+#if GSUSB_HAS_DFU_RUNTIME
 static uint8_t g_msos_ext_prop_dfu[MSOS_EXT_PROP_LEN];
+#endif
 
 /*
  * CherryUSB indexes this with setup->wValue, i.e. the function index, so keep
  * one entry per function plus a trailing guard for out-of-range values.
  */
-static const uint8_t *g_msos_ext_prop_list[3] = {
+static const uint8_t *g_msos_ext_prop_list[] = {
     g_msos_ext_prop,
-    NULL,                  /* filled by msos_ext_prop_build_one() */
+#if GSUSB_HAS_DFU_RUNTIME
+    g_msos_ext_prop_dfu, /* filled by msos_ext_prop_build_one() before use */
+#endif
     g_msos_ext_prop_empty,
 };
 
+#if GSUSB_HAS_DFU_RUNTIME
 /*
  * Emit a one-property extended properties descriptor holding the given
  * REG_MULTI_SZ DeviceInterfaceGUID.  Assembled from the plain ASCII string so
@@ -248,6 +286,7 @@ static void msos_ext_prop_build_one(uint8_t *dst, const char *guid)
     dst[p++] = 0x00U; /* MULTI_SZ list terminator   */
     dst[p++] = 0x00U;
 }
+#endif /* GSUSB_HAS_DFU_RUNTIME */
 
 static const struct usb_msosv1_descriptor g_msosv1_desc = {
     .string = g_msos_string,
@@ -298,8 +337,10 @@ static const char *string_descriptor_callback(uint8_t speed, uint8_t index)
         return g_serial_string;
     case USBD_IDX_CONFIG_STR:
         return (const char *)USBD_CONFIGURATION_STRING_FS;
+#if GSUSB_HAS_DFU_RUNTIME
     case DFU_INTERFACE_STR_INDEX:
         return (const char *)DFU_INTERFACE_STRING_FS;
+#endif
     default:
         return NULL;
     }
@@ -592,9 +633,11 @@ static struct usbd_interface g_intf_gs_usb = {
     .notify_handler = gs_bridge_notify,
 };
 
+#if GSUSB_HAS_DFU_RUNTIME
 static struct usbd_interface g_intf_dfu = {
     .class_interface_handler = gs_bridge_setup,
 };
+#endif
 
 static struct usbd_endpoint g_ep_in = {
     .ep_addr = GSUSB_ENDPOINT_IN,
@@ -641,15 +684,18 @@ USBD_StatusTypeDef USBD_RegisterClass(USBD_HandleTypeDef *pdev, USBD_ClassTypeDe
     hex32(g_serial_string + 8, w1);
     hex32(g_serial_string + 16, w2);
 
+#if GSUSB_HAS_DFU_RUNTIME
     /* Give the DFU runtime interface (function 1) its own DeviceInterfaceGUID,
      * otherwise Windows exposes no device interface for it and dfu-util fails
      * with "Cannot claim interface 1: LIBUSB_ERROR_NOT_SUPPORTED". */
     msos_ext_prop_build_one(g_msos_ext_prop_dfu, DFU_RUNTIME_INTERFACE_GUID);
-    g_msos_ext_prop_list[1] = g_msos_ext_prop_dfu;
+#endif
 
     usbd_desc_register(0U, &gs_descriptor);
     usbd_add_interface(0U, &g_intf_gs_usb); /* interface 0 (intf_num = 0) */
+#if GSUSB_HAS_DFU_RUNTIME
     usbd_add_interface(0U, &g_intf_dfu);    /* interface 1 (intf_num = 1) */
+#endif
     usbd_add_endpoint(0U, &g_ep_in);
     usbd_add_endpoint(0U, &g_ep_out);
 
