@@ -115,25 +115,32 @@ cmake --preset hscant-dfu --fresh     # 需要 CMake >= 3.24
 
 ### 3.2 支持的 Board 与 Preset
 
-| Board | Release preset | Debug preset | `BOARD` |
-| --- | --- | --- | --- |
-| HPM5321 USB2CAN dongle | `hpm5321_usb2can-dfu` | `hpm5321_usb2can-dfu-debug` | `hpm5321_usb2can` |
-| HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant` |
+| Board | DFU Release | DFU Debug | UF2 Release | UF2 Debug | `BOARD` |
+| --- | --- | --- | --- | --- | --- |
+| HPM5321 USB2CAN dongle | `hpm5321_usb2can-dfu` | `hpm5321_usb2can-dfu-debug` | `hpm5321_usb2can-uf2` | `hpm5321_usb2can-uf2-debug` | `hpm5321_usb2can` |
+| HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
 
-Release 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`、`CMAKE_BUILD_TYPE=Release`）；`-debug` 预设继承 `base-debug`。查看全部 preset：
+`-dfu` 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`）；`-uf2` 预设继承 `base-uf2`（`HPM_BUILD_TYPE=flash_uf2`）；`-debug` 变体分别继承 `base-debug` / `base-uf2-debug`。查看全部 preset：
 
 ```bash
 cmake --list-presets
 ```
 
-### 3.3 `flash_dfu` 的含义
+### 3.3 两种镜像形态
 
-这是**应用程序镜像**，不是独立固件：
+两者都是**应用程序镜像**（不是独立固件），均链接在 `0x80020000`，前面有 4 字节签名，由位于 `0x80000000` 的引导程序启动；区别在于签名与「请求引导程序」的方式：
 
-- 链接在 `0x80020000`，并带 `.dfu_signature`；
-- 由位于 `0x80000000` 的引导程序 [`hpm_dfu_boot`](../hpm_dfu_boot) 启动。
+- **`flash_dfu`** —— 携带 `.dfu_signature`，由 [`hpm_dfu_boot`](../hpm_dfu_boot) 启动。APP 通过保留寄存器写入 magic 请求进入 DFU 模式（`src/dfu_hpm.c`）。
+- **`flash_uf2`** —— 携带 `.uf2_signature`（`BOARD_UF2_SIGNATURE = 0x0A4D5048`），由 UF2/MSC 引导程序（设备原版 boot）启动。构建时还会用 `tools/uf2conv.py` 生成 `<APP_NAME>.uf2`（family `0x0A4D5048`、基址 `0x80020000`），可直接拖入 boot 暴露出的 MSC 盘符。APP 通过在共享的 `bl_setting` 块（`src/bl_setting.c`）中置 `keep_bootloader` 并复位来请求引导程序。
 
-必须先烧录 bootloader。`HPM_BUILD_TYPE=flash_xip`（独立运行于 `0x80000000`）在本工程**没有任何 preset 使用** —— 本 APP 只作为 DFU 镜像构建。
+每个形态搭配不同的 bootloader：
+
+| 预设形态 | 配套 boot |
+| --- | --- |
+| `*-dfu` | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译 |
+| `*-uf2` | HSCanT 设备**原版闭源** UF2/MSC boot —— 修改自 CherryDAP 的 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。没有它的源码也能保持兼容；恢复出的契约见 [主 README](README_zh.md#引导程序与镜像兼容性)。 |
+
+`HPM_BUILD_TYPE=flash_xip`（独立运行于 `0x80000000`）在本工程**没有任何 preset 使用**。
 
 ---
 
@@ -143,11 +150,13 @@ cmake --list-presets
 build/<preset>/output/candle_usb2canfd.elf
 build/<preset>/output/candle_usb2canfd.hex
 build/<preset>/output/candle_usb2canfd.bin
+build/<preset>/output/candle_usb2canfd.uf2   # 仅 flash_uf2 预设
 ```
 
 - `.elf`：用于调试 / OpenOCD 烧录；
 - `.hex`：Intel HEX 格式，便于烧录工具写入；
-- `.bin`：裸镜像，**就是喂给 `dfu-util -D` 的文件**。
+- `.bin`：裸镜像，**就是喂给 `dfu-util -D` 的文件**；
+- `.uf2`：UF2 镜像，**拖入 boot 暴露的 MSC 盘符即可烧录**。
 
 工程配置要点（见 `CMakeLists.txt`）：
 

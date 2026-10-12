@@ -224,7 +224,7 @@ Four things do not map over 1:1 and cost most of the debugging time:
 ```
 candleLight_fw_hpm_port/
 ├── CMakeLists.txt              # Build script (HPM SDK + CherryUSB)
-├── CMakePresets.json           # Per-board presets (all flash_dfu)
+├── CMakePresets.json           # Per-board presets (flash_dfu + flash_uf2)
 ├── boards/
 │   ├── hscant/                 # Board package (clock, pinmux, CAN clock, LED)
 │   └── hpm5321_usb2can/        # Board package
@@ -282,6 +282,56 @@ Every board reports a **unique** `iSerialNumber` derived from the chip UUID, so 
 > `HKLM\SYSTEM\CurrentControlSet\Control\usbflags\<VID><PID><REV>\osvc`. If a device revision was ever enumerated
 > **without** WCID, `osvc` is stuck at `00 00` and Windows will not re-query. Delete that key (or bump `bcdDevice`).
 
+### UF2 flashing (`flash_uf2` presets)
+
+`flash_uf2` images carry a `.uf2_signature` (`0x0A4D5048`) and are consumed by the
+UF2/MSC bootloader already present on the device — the original, closed-source
+one. Build an image and copy the `.uf2` onto the volume it exposes:
+
+```bash
+cmake --preset hscant-uf2 && cmake --build --preset hscant-uf2
+cp build/hscant-uf2/output/candle_usb2canfd.uf2 /media/$USER/HPM/
+```
+
+To get back into the bootloader at run time, long-press the user button (~500 ms):
+the application sets `keep_bootloader` in the shared `bl_setting` block
+(`src/bl_setting.c`) and re-enters the ROM boot flow. This flavour advertises **no
+DFU runtime interface**, so there is no `DETACH` request path.
+
+The bootloader shares **EWDG0** with the application, so `flash_uf2` images
+disable it once during bring-up (`src/wdt_hpm.c`) instead of feeding it;
+`flash_dfu` images leave it alone.
+
+---
+
+## Bootloaders and image compatibility
+
+The HSCanT hardware has two possible bootloaders, and each one pairs with a
+different build of this application:
+
+| Application preset | Signature at `0x80020000` | Pairs with |
+| --- | --- | --- |
+| `*-dfu` (`HPM_BUILD_TYPE=flash_dfu`) | `.dfu_signature` (`0x48504D21`) | the bootloader built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
+| `*-uf2` (`HPM_BUILD_TYPE=flash_uf2`) | `.uf2_signature` (`0x0A4D5048`) | the **original, closed-source** boot of the HSCanT device (UF2/MSC) |
+
+**Why this is possible at all.** The HSCanT boot is a derivative of CherryDAP's
+[HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader).
+Because that lineage is public, the behaviour of the closed-source boot could be
+recovered from the complete `boot+app` image alone (`boards/hscant/hpm5300_flash_1M.bin`)
+plus the vendor's `.uf2` — so even though we do not have its sources, that does not
+stop us from being compatible with it.
+
+The compatibility contract recovered from that image and implemented here:
+
+- application base `0x80020000`, first word `0x0A4D5048` (`BOARD_UF2_SIGNATURE`);
+- UF2 family `0x0A4D5048`, so `tools/uf2conv.py -f 0x0A4D5048 -b 0x80020000` yields a droppable image;
+- a `bl_setting` block at `0xF0407E00` (last 512 bytes of AHB_SRAM), magic `0xB7B7B7B7`, `keep_bootloader` = bit 0 of byte 4 — the application sets it and re-enters the ROM boot flow (`ROM_API_TABLE_ROOT->run_bootloader`) to ask for the UF2 volume (a plain software reset is *not* enough: it does not preserve the block for the bootloader);
+- the boot pin is the user button (PA2, active high, debounced by the boot itself);
+- EWDG0 is **disabled** once during bring-up (`src/wdt_hpm.c`) rather than fed;
+- UF2 images expose **no DFU runtime interface** — there is no DFU endpoint to talk to, so the `flash_uf2` build omits it from the USB descriptor.
+
+See the [UF2 flashing](#uf2-flashing-flash_uf2-presets) section for the flashing flow.
+
 ---
 
 ## How to Build
@@ -295,7 +345,7 @@ cmake --preset hscant-dfu
 cmake --build --preset hscant-dfu
 ```
 
-Artifacts land in `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin`.
+Artifacts land in `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin` (and `.uf2` for the `flash_uf2` presets).
 
 ---
 

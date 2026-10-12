@@ -115,25 +115,32 @@ cmake --preset hscant-dfu --fresh     # needs CMake >= 3.24
 
 ### 3.2 Supported Boards and Presets
 
-| Board | Release preset | Debug preset | `BOARD` |
-| --- | --- | --- | --- |
-| HPM5321 USB2CAN dongle | `hpm5321_usb2can-dfu` | `hpm5321_usb2can-dfu-debug` | `hpm5321_usb2can` |
-| HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant` |
+| Board | DFU release | DFU debug | UF2 release | UF2 debug | `BOARD` |
+| --- | --- | --- | --- | --- | --- |
+| HPM5321 USB2CAN dongle | `hpm5321_usb2can-dfu` | `hpm5321_usb2can-dfu-debug` | `hpm5321_usb2can-uf2` | `hpm5321_usb2can-uf2-debug` | `hpm5321_usb2can` |
+| HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
 
-Release presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`, `CMAKE_BUILD_TYPE=Release`); the `-debug` presets inherit `base-debug`. List them with:
+`-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`); `-uf2` presets inherit `base-uf2` (`HPM_BUILD_TYPE=flash_uf2`). The `-debug` variants inherit `base-debug` / `base-uf2-debug`. List them with:
 
 ```bash
 cmake --list-presets
 ```
 
-### 3.3 What "flash_dfu" means
+### 3.3 Boot image flavours
 
-This is an **application image**, not a standalone firmware:
+Both flavours are **application images** (not standalone firmware), linked at `0x80020000` behind a 4-byte signature and started by a bootloader at `0x80000000`. They differ in the signature and in how the application requests the bootloader:
 
-- linked at `0x80020000`, behind a `.dfu_signature`;
-- started by the bootloader [`hpm_dfu_boot`](../hpm_dfu_boot) which sits at `0x80000000`.
+- **`flash_dfu`** — carries a `.dfu_signature` and is started by [`hpm_dfu_boot`](../hpm_dfu_boot). The application requests DFU mode through a retention-register magic (`src/dfu_hpm.c`).
+- **`flash_uf2`** — carries a `.uf2_signature` (`BOARD_UF2_SIGNATURE = 0x0A4D5048`) and is started by a UF2/MSC bootloader (the stock one shipped on the device). The build also emits `<APP_NAME>.uf2` (family `0x0A4D5048`, base `0x80020000`) through `tools/uf2conv.py`, ready to be dropped onto the exposed MSC volume. The application requests the bootloader by setting `keep_bootloader` in the shared `bl_setting` block (`src/bl_setting.c`) and resetting.
 
-Flash the bootloader first. `HPM_BUILD_TYPE=flash_xip` (standalone at `0x80000000`) is **not** used by any preset here — the application is only ever built as a DFU image.
+Each flavour pairs with a different bootloader:
+
+| Preset flavour | Bootloader |
+| --- | --- |
+| `*-dfu` | built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
+| `*-uf2` | the HSCanT device's original, closed-source UF2/MSC boot — a derivative of CherryDAP's [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader). No boot sources are needed to stay compatible with it; the recovered contract is documented in the [main README](README.md#bootloaders-and-image-compatibility). |
+
+`HPM_BUILD_TYPE=flash_xip` (standalone at `0x80000000`) is **not** used by any preset here.
 
 ---
 
@@ -143,11 +150,13 @@ Flash the bootloader first. `HPM_BUILD_TYPE=flash_xip` (standalone at `0x8000000
 build/<preset>/output/candle_usb2canfd.elf
 build/<preset>/output/candle_usb2canfd.hex
 build/<preset>/output/candle_usb2canfd.bin
+build/<preset>/output/candle_usb2canfd.uf2   # flash_uf2 presets only
 ```
 
 - `.elf` — for debugging / OpenOCD flashing;
 - `.hex` — Intel HEX, for flashing tools;
-- `.bin` — raw image, **this is what you feed to `dfu-util -D`**.
+- `.bin` — raw image, **this is what you feed to `dfu-util -D`**;
+- `.uf2` — UF2 image, **this is what you drop onto the bootloader's MSC volume**.
 
 Key build configuration (see `CMakeLists.txt`):
 

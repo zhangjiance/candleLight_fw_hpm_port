@@ -17,11 +17,18 @@
 #                     DFU signature).  Select it with -DBOARD=<name> and add a
 #                     matching BOARD_<name> block in candleLight_fw/include/config.h.
 #
-# Every preset uses HPM_BUILD_TYPE=flash_dfu: the application is linked at
-# 0x80020000 behind the .dfu_signature and is started by hpm_dfu_boot (which
-# sits at 0x80000000).  Configure/build from this directory, e.g.:
-#   cmake --preset hscant-dfu              && cmake --build --preset hscant-dfu
-#   cmake --preset hpm5321_usb2can-dfu     && cmake --build --preset hpm5321_usb2can-dfu
+# Two bootloader flavours are supported, selected by HPM_BUILD_TYPE:
+#
+#   flash_dfu  (.dfu_signature) - APP started by hpm_dfu_boot at 0x80000000.
+#               Configure/build from this directory, e.g.:
+#                 cmake --preset hscant-dfu && cmake --build --preset hscant-dfu
+#
+#   flash_uf2  (.uf2_signature) - APP started by the device's stock UF2/MSC
+#               bootloader (the original, closed-source boot).
+#               Also emits <APP_NAME>.uf2 for drag-and-drop flashing:
+#                 cmake --preset hscant-uf2 && cmake --build --preset hscant-uf2
+#
+# Both link at 0x80020000 behind a 4 byte signature.
 
 cmake_minimum_required(VERSION 3.13)
 
@@ -133,6 +140,8 @@ sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/timer.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_hpm.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/port_device.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/port_board.c)
+sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/bl_setting.c)
+sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/wdt_hpm.c)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     sdk_compile_definitions(-DNDEBUG)
@@ -149,5 +158,24 @@ add_custom_command(TARGET ${APP_ELF_NAME} POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O binary -S ${ELF} ${BIN}
     COMMENT "Generating ${APP_NAME}.hex / .bin"
 )
+
+# UF2 image for drag-and-drop flashing by a UF2/MSC bootloader.  The family id
+# (0x0A4D5048, "HPM") and the application base address (0x80020000) must match
+# the bootloader; both default to the stock values and can be overridden with
+# -DUF2_FAMILY_ID=... / -DUF2_APP_BASE=...
+if(NOT DEFINED UF2_FAMILY_ID)
+    set(UF2_FAMILY_ID 0x0A4D5048)
+endif()
+if(NOT DEFINED UF2_APP_BASE)
+    set(UF2_APP_BASE 0x80020000)
+endif()
+if(HPM_BUILD_TYPE STREQUAL "flash_uf2")
+    set(UF2 ${EXECUTABLE_OUTPUT_PATH}/${APP_NAME}.uf2)
+    add_custom_command(TARGET ${APP_ELF_NAME} POST_BUILD
+        COMMAND ${python_exec} ${CMAKE_CURRENT_SOURCE_DIR}/tools/uf2conv.py
+                -f ${UF2_FAMILY_ID} -b ${UF2_APP_BASE} -c ${BIN} -o ${UF2}
+        COMMENT "Generating ${APP_NAME}.uf2"
+    )
+endif()
 
 message(STATUS "Board: ${BOARD}  HPM_BUILD_TYPE: ${HPM_BUILD_TYPE}")

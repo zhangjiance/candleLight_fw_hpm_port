@@ -216,7 +216,7 @@ HPM 的 MCAN 就是 Bosch M_CAN，因此 `candleLight_fw/src/can/m_can.c` 几乎
 ```
 candleLight_fw_hpm_port/
 ├── CMakeLists.txt              # 工程构建脚本（HPM SDK + CherryUSB）
-├── CMakePresets.json           # 各板预设（全部为 flash_dfu）
+├── CMakePresets.json           # 各板预设（flash_dfu + flash_uf2）
 ├── boards/
 │   ├── hscant/                 # 板级包（时钟、引脚复用、CAN 时钟、LED）
 │   └── hpm5321_usb2can/        # 板级包
@@ -274,6 +274,46 @@ dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D candle_usb2canfd.bin
 > `HKLM\SYSTEM\CurrentControlSet\Control\usbflags\<VID><PID><REV>\osvc`。若某个固件版本曾在**没有** WCID 的情况下枚举过，
 > `osvc` 会一直是 `00 00`，Windows 之后不再重新查询。删除该键（或提升 `bcdDevice`）即可。
 
+### UF2 烧录（`flash_uf2` 预设）
+
+`flash_uf2` 镜像携带 `.uf2_signature`（`0x0A4D5048`），由设备上现有的 UF2/MSC 引导程序（即原版闭源 boot）消费。构建后把 `.uf2` 拷入它暴露出的盘符即可：
+
+```bash
+cmake --preset hscant-uf2 && cmake --build --preset hscant-uf2
+cp build/hscant-uf2/output/candle_usb2canfd.uf2 /media/$USER/HPM/
+```
+
+运行期想回到 bootloader：长按用户按键约 500 ms。APP 会在共享的 `bl_setting` 块（`src/bl_setting.c`）中置 `keep_bootloader`，再经 ROM 引导流程重新进入。该形态不暴露 DFU runtime 接口，因此也不存在 `DETACH` 请求路径。
+
+boot 与 APP 共享 **EWDG0**，因此 `flash_uf2` 镜像在启动时**一次性关闭**看门狗（`src/wdt_hpm.c`），而不是持续喂狗；`flash_dfu` 镜像不触碰它。
+
+---
+
+## 引导程序与镜像兼容性
+
+HSCanT 硬件存在两种可能的引导程序，各自搭配本工程不同的编译产物：
+
+| 本工程预设 | `0x80020000` 处的签名 | 配套的 boot |
+| --- | --- | --- |
+| `*-dfu`（`HPM_BUILD_TYPE=flash_dfu`） | `.dfu_signature`（`0x48504D21`） | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译出的 bootloader |
+| `*-uf2`（`HPM_BUILD_TYPE=flash_uf2`） | `.uf2_signature`（`0x0A4D5048`） | HSCanT 设备**原版闭源 boot**（UF2/MSC） |
+
+**为什么可以做到。** HSCanT 的 boot 修改自 CherryDAP 的
+[HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。
+正因为这一血统是公开的，仅凭完整的 `boot+app` 镜像（`boards/hscant/hpm5300_flash_1M.bin`）加上厂商的 `.uf2`，
+就足以还原这套闭源 boot 的行为 —— **即使我们拿不到它的源码，也不妨碍对它做兼容**。
+
+从该镜像中恢复并在本工程实现的兼容契约：
+
+- APP 基址 `0x80020000`，首字 `0x0A4D5048`（`BOARD_UF2_SIGNATURE`）；
+- UF2 family `0x0A4D5048`，因此 `tools/uf2conv.py -f 0x0A4D5048 -b 0x80020000` 产出的镜像可直接拖入；
+- `bl_setting` 位于 `0xF0407E00`（AHB_SRAM 末尾 512 字节），magic `0xB7B7B7B7`，`keep_bootloader` = 字节 4 的 bit0 —— APP 置位后经 ROM 引导流程（`ROM_API_TABLE_ROOT->run_bootloader`）重新进入，即可请求 UF2 盘符（普通软复位**不行**：它不会把该块保留给 bootloader）；
+- 引导引脚就是用户按键（PA2，高有效，去抖由 boot 侧完成）；
+- EWDG0 在启动时被**一次性关闭**（`src/wdt_hpm.c`），而不是持续喂狗；
+- UF2 镜像**不再暴露 DFU runtime 接口** —— 没有 DFU 端点可对话，`flash_uf2` 构建会把它从 USB 描述符中移除。
+
+烧录流程见 [UF2 烧录](#uf2-烧录flash_uf2-预设)。
+
 ---
 
 ## 如何编译
@@ -287,7 +327,7 @@ cmake --preset hscant-dfu
 cmake --build --preset hscant-dfu
 ```
 
-产物位于 `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin`。
+产物位于 `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin`（`flash_uf2` 预设另有 `.uf2`）。
 
 ---
 

@@ -27,6 +27,23 @@
             }
         },
         {
+            "name": "base-uf2",
+            "hidden": true,
+            "inherits": "base",
+            "description": "Base preset for UF2/MSC bootloader images: HPM_BUILD_TYPE=flash_uf2, i.e. an APP linked at 0x80020000 behind a .uf2_signature. Also emits <APP_NAME>.uf2 (family 0x0A4D5048) for drag-and-drop flashing.",
+            "cacheVariables": {
+                "HPM_BUILD_TYPE": "flash_uf2"
+            }
+        },
+        {
+            "name": "base-uf2-debug",
+            "hidden": true,
+            "inherits": "base-uf2",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
             "name": "hpm5321_usb2can-dfu",
             "displayName": "candleLight USB2CANFD - HPM5321 USB2CAN dongle (Release)",
             "inherits": "base",
@@ -61,6 +78,42 @@
                 "BOARD": "hscant"
             },
             "binaryDir": "${sourceDir}/build/hscant-dfu-debug"
+        },
+        {
+            "name": "hscant-uf2",
+            "displayName": "candleLight USB2CANFD - HSCanT (UF2, Release)",
+            "inherits": "base-uf2",
+            "cacheVariables": {
+                "BOARD": "hscant"
+            },
+            "binaryDir": "${sourceDir}/build/hscant-uf2"
+        },
+        {
+            "name": "hpm5321_usb2can-uf2",
+            "displayName": "candleLight USB2CANFD - HPM5321 USB2CAN dongle (UF2, Release)",
+            "inherits": "base-uf2",
+            "cacheVariables": {
+                "BOARD": "hpm5321_usb2can"
+            },
+            "binaryDir": "${sourceDir}/build/hpm5321_usb2can-uf2"
+        },
+        {
+            "name": "hscant-uf2-debug",
+            "displayName": "candleLight USB2CANFD - HSCanT (UF2, Debug)",
+            "inherits": "base-uf2-debug",
+            "cacheVariables": {
+                "BOARD": "hscant"
+            },
+            "binaryDir": "${sourceDir}/build/hscant-uf2-debug"
+        },
+        {
+            "name": "hpm5321_usb2can-uf2-debug",
+            "displayName": "candleLight USB2CANFD - HPM5321 USB2CAN dongle (UF2, Debug)",
+            "inherits": "base-uf2-debug",
+            "cacheVariables": {
+                "BOARD": "hpm5321_usb2can"
+            },
+            "binaryDir": "${sourceDir}/build/hpm5321_usb2can-uf2-debug"
         }
     ],
     "buildPresets": [
@@ -86,6 +139,30 @@
             "name": "hscant-dfu-debug",
             "displayName": "Build candleLight USB2CANFD - HSCanT (Debug)",
             "configurePreset": "hscant-dfu-debug",
+            "jobs": 8
+        },
+        {
+            "name": "hscant-uf2",
+            "displayName": "Build candleLight USB2CANFD - HSCanT (UF2, Release)",
+            "configurePreset": "hscant-uf2",
+            "jobs": 8
+        },
+        {
+            "name": "hpm5321_usb2can-uf2",
+            "displayName": "Build candleLight USB2CANFD - HPM5321 USB2CAN dongle (UF2, Release)",
+            "configurePreset": "hpm5321_usb2can-uf2",
+            "jobs": 8
+        },
+        {
+            "name": "hscant-uf2-debug",
+            "displayName": "Build candleLight USB2CANFD - HSCanT (UF2, Debug)",
+            "configurePreset": "hscant-uf2-debug",
+            "jobs": 8
+        },
+        {
+            "name": "hpm5321_usb2can-uf2-debug",
+            "displayName": "Build candleLight USB2CANFD - HPM5321 USB2CAN dongle (UF2, Debug)",
+            "configurePreset": "hpm5321_usb2can-uf2-debug",
             "jobs": 8
         }
     ]

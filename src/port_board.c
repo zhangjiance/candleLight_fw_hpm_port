@@ -98,7 +98,7 @@ enum gs_can_termination_state get_term(can_data_t *channel)
 #endif
 
 /*
- * Long-press the user button (~500 ms) to request the DFU bootloader.  Called
+ * Long-press the user button (~500 ms) to request the bootloader.  Called
  * from the candleLight main loop through config.mainloop_callback; the hold
  * time is measured with timer_get() so the CAN/USB loop is never blocked.
  */

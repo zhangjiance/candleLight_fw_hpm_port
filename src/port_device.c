@@ -21,6 +21,11 @@
 #include "hal_include.h"
 #include "timer.h"
 
+#if defined(FLASH_UF2) && FLASH_UF2
+#include "bl_setting.h"
+#endif
+#include "wdt_hpm.h"
+
 /*
  * Device unique ID used for the USB iSerialNumber.
  *
@@ -56,6 +61,16 @@ static void hpm_uid_load(void)
 void HAL_Init(void)
 {
     board_init();
+
+#if defined(FLASH_UF2) && FLASH_UF2
+    /* The stock UF2 bootloader counts bounced boots in bl_setting; a healthy
+     * application boot clears that counter (and publishes its version). */
+    bl_setting_app_init();
+#endif
+
+    /* The stock bootloader may leave EWDG0 armed with reset-on-timeout; make
+     * sure the clock is on and start feeding it before anything blocks. */
+    wdt_hpm_init();
 
     /* Chip UUID -> USB iSerialNumber (must be unique per board). */
     hpm_uid_load();
