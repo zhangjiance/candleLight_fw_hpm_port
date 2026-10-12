@@ -15,7 +15,9 @@
 #   src/     = HPMicro implementation (CherryUSB bridge, MCAN, timer, DFU)
 #   boards/<BOARD>/ = board package (clock tree, pad muxing, CAN clock, LED,
 #                     DFU signature).  Select it with -DBOARD=<name> and add a
-#                     matching BOARD_<name> block in candleLight_fw/include/config.h.
+#                     matching BOARD_<name> block in candleLight_fw/include/config.h
+#                     ('-' in <name> becomes '_' in that macro, e.g. hscant-lite
+#                     maps to a BOARD_hscant_lite block).
 #
 # Two bootloader flavours are supported, selected by HPM_BUILD_TYPE:
 #
@@ -120,7 +122,13 @@ sdk_inc(${CANDLE_FW}/libs/STM32_USB_Device_Library/config)
 # STM32G4 selects candleLight's FDCAN code paths (can.h / device.h) and makes
 # m_can.c's "DataLength as is" semantics apply.  We only use it as a switch -
 # no STM32 HAL is compiled.
-sdk_compile_definitions(-DBOARD_${BOARD} -DSTM32G4)
+#
+# The board selector macro is read by candleLight_fw/include/config.h, a
+# submodule that owns the board table, and has to be a valid C identifier - so a
+# '-' in the board name becomes '_': -DBOARD=hscant-lite selects the
+# BOARD_hscant_lite block (which that file still has to gain).
+string(REPLACE "-" "_" BOARD_MACRO "${BOARD}")
+sdk_compile_definitions(-DBOARD_${BOARD_MACRO} -DSTM32G4)
 
 # ---------------------------------------------------------------------------
 # Sources

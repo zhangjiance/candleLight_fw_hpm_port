@@ -82,7 +82,7 @@ ATTR_PLACE_AT(".uf2_signature") __attribute__((used)) const uint32_t uf2_signatu
  * DFU signature.  hpm_dfu_boot only jumps into the application if the first
  * word at USBD_DFU_APP_DEFAULT_ADD equals BOARD_DFU_SIGNATURE, so the
  * application must reserve it in front of its vector table (flash_dfu.ld).
- * (hpm_dfu_boot's hpm5321_usb2can board did not need this because it is the
+ * (hpm_dfu_boot's hscant-lite board did not need this because it is the
  * bootloader itself.)
  */
 #if defined(FLASH_DFU) && FLASH_DFU

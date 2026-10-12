@@ -143,7 +143,7 @@ Contains **no hardware code**, only contracts and shims:
 
 ### Layer 4 — `boards/<BOARD>/`
 
-Per-board package: clock tree, pad muxing, CAN clock selection, LED, DFU signature and the retention register used for the DFU reboot request. Two packages exist today: `hscant` and `hpm5321_usb2can`.
+Per-board package: clock tree, pad muxing, CAN clock selection, LED, DFU signature and the retention register used for the DFU reboot request. Two packages exist today: `hscant` and `hscant-lite` (the latter is **not yet tested**).
 
 ---
 
@@ -227,7 +227,7 @@ candleLight_fw_hpm_port/
 ├── CMakePresets.json           # Per-board presets (flash_dfu + flash_uf2)
 ├── boards/
 │   ├── hscant/                 # Board package (clock, pinmux, CAN clock, LED)
-│   └── hpm5321_usb2can/        # Board package
+│   └── hscant-lite/            # Board package (not yet tested)
 ├── port/                       # Platform seam: no hardware code
 │   ├── hal_include.h           # STM32-style HAL shim
 │   ├── cmsis_device.h          # RISC-V CMSIS shim

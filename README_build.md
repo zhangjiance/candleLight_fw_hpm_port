@@ -118,6 +118,7 @@ cmake --preset hscant-uf2 --fresh     # needs CMake >= 3.24
 | Board | DFU release | DFU debug | UF2 release | UF2 debug | `BOARD` |
 | --- | --- | --- | --- | --- | --- |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
+| HSCanT-Lite | — (not yet tested) | — | — | — | `hscant-lite` |
 
 The `hscant-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`); the `hscant-uf2` presets inherit `base-uf2` (`HPM_BUILD_TYPE=flash_uf2`). The `-debug` variants inherit `base-debug` / `base-uf2-debug`. List them with:
 
@@ -125,7 +126,7 @@ The `hscant-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash
 cmake --list-presets
 ```
 
-> The `boards/hpm5321_usb2can/` board package is still present but intentionally has **no preset yet** (that platform is untested); configure it manually with `-DBOARD=hpm5321_usb2can -DHPM_BUILD_TYPE=flash_dfu`.
+> **HSCanT-Lite is not yet tested**, so it intentionally has **no preset**. The `boards/hscant-lite/` package is in place, but building it also needs a `BOARD_hscant_lite` block in `candleLight_fw/include/config.h` (an untouched submodule); once that is added, configure it with `-DBOARD=hscant-lite -DHPM_BUILD_TYPE=flash_dfu`.
 
 ### 3.3 Boot image flavours
 

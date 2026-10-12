@@ -18,7 +18,7 @@
 #include "hpm_debug_console.h"
 #endif
 
-#define BOARD_NAME          "hpm5321_usb2can"
+#define BOARD_NAME          "hscant-lite"
 #define BOARD_UF2_SIGNATURE (0x0A4D5048UL)
 #define BOARD_DFU_SIGNATURE (0x48504D21UL)
 
@@ -138,7 +138,7 @@
  *
  * NOTE: this board has NO user LED.  The macros below were carried over from
  * hpm_dfu_boot where they were used as a boot indicator, but PA26 is actually
- * CAN1_TR (CAN1 transceiver enable) according to HPM5321_QFN48_USB2CAN.hpmpc.
+ * CAN1_TR (CAN1 transceiver enable) according to hscant-lite.hpmpc.
  * Toggling it would disturb CAN1, so BOARD_HAS_SYS_LED is 0 and the "running"
  * heartbeat is disabled.  Set it to 1 (and point the macros at a real LED pad)
  * if a future board revision adds one.

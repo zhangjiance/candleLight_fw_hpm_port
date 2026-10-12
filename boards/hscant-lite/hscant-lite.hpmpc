@@ -4,7 +4,7 @@
   "content": {
     "pid": "eae37ed6-daa7-4ab1-8071-cc7a846b7dfc",
     "info": {
-      "projectName": "HPM5321_QFN48_USB2CAN",
+      "projectName": "hscant-lite.hpmpc",
       "sdkName": "1.11.0",
       "socName": "HPM5321",
       "packageName": "QFN48",

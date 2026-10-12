@@ -118,6 +118,7 @@ cmake --preset hscant-uf2 --fresh     # 需要 CMake >= 3.24
 | Board | DFU Release | DFU Debug | UF2 Release | UF2 Debug | `BOARD` |
 | --- | --- | --- | --- | --- | --- |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
+| HSCanT-Lite | —（待测试） | — | — | — | `hscant-lite` |
 
 `hscant-dfu` 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`）；`hscant-uf2` 预设继承 `base-uf2`（`HPM_BUILD_TYPE=flash_uf2`）；`-debug` 变体分别继承 `base-debug` / `base-uf2-debug`。查看全部 preset：
 
@@ -139,7 +140,7 @@ cmake --list-presets
 | `hscant-dfu` | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译 |
 | `hscant-uf2` | HSCanT 设备**原版闭源** UF2/MSC boot —— 修改自 CherryDAP 的 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。没有它的源码也能保持兼容；恢复出的契约见 [主 README](README_zh.md#引导程序与镜像兼容性)。 |
 
-> `boards/hpm5321_usb2can/` 板级包仍然保留，但**暂时没有 preset**（该平台尚未测试）；如需构建请手动指定 `-DBOARD=hpm5321_usb2can -DHPM_BUILD_TYPE=flash_dfu`。
+> **HSCanT-Lite 尚未测试**，因此暂时**没有 preset**：`boards/hscant-lite/` 板级包已就位，但要构建它还需要在 `candleLight_fw/include/config.h`（未改动的子模块）中增加 `BOARD_hscant_lite` 分支；补齐后可用 `-DBOARD=hscant-lite -DHPM_BUILD_TYPE=flash_dfu` 手动配置。
 
 `HPM_BUILD_TYPE=flash_xip`（独立运行于 `0x80000000`）在本工程**没有任何 preset 使用**。
 

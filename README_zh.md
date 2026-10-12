@@ -143,7 +143,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 ### 第 4 层 —— `boards/<BOARD>/`
 
-板级包：时钟树、引脚复用、CAN 时钟选择、LED、DFU 签名，以及 DFU 复位请求所用的保留寄存器。目前有两个包：`hscant` 与 `hpm5321_usb2can`。
+板级包：时钟树、引脚复用、CAN 时钟选择、LED、DFU 签名，以及 DFU 复位请求所用的保留寄存器。目前有两个包：`hscant` 与 `hscant-lite`（后者**待测试**）。
 
 ---
 
@@ -219,7 +219,7 @@ candleLight_fw_hpm_port/
 ├── CMakePresets.json           # 各板预设（flash_dfu + flash_uf2）
 ├── boards/
 │   ├── hscant/                 # 板级包（时钟、引脚复用、CAN 时钟、LED）
-│   └── hpm5321_usb2can/        # 板级包
+│   └── hscant-lite/            # 板级包（待测试）
 ├── port/                       # 平台接缝：不含硬件代码
 │   ├── hal_include.h           # STM32 风格 HAL 垫片
 │   ├── cmsis_device.h          # RISC-V CMSIS 垫片

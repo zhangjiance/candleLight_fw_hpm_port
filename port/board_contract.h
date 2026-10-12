@@ -5,7 +5,7 @@
  * Supported boards
  * ----------------
  *   hscant            HPMicro HSCanT (HPM5321/HPM5361)
- *   hpm5321_usb2can   HPMicro HPM5321 USB2CAN dongle (QFN48)
+ *   hscant-lite       HPMicro HSCanT-Lite, HPM5321 USB2CAN dongle (QFN48)
  *
  * Adding a board
  * --------------
@@ -15,6 +15,7 @@
  *          pinmux.c   - init_can_pins() and friends
  *      (a board may reuse the "clock.c" style of the HPM pinmux tool)
  *   2. add a "BOARD_<name>" block to candleLight_fw/include/config.h
+ *      ('-' in <name> becomes '_' there, e.g. hscant-lite -> BOARD_hscant_lite)
  *      (USB strings, NUM_CAN_CHANNEL, CAN_CLOCK_SPEED, CONFIG_CANFD)
  *   3. add a preset in CMakePresets.json with -DBOARD=<name>
  *   Nothing in port/ or src/ has to change.
