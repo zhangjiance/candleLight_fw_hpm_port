@@ -213,9 +213,20 @@ void can_enable(can_data_t *channel, uint32_t mode)
     cfg.ram_config.enable_ext_filter = false;
     cfg.ram_config.ext_filter_elem_count = 0U;
 
-    cfg.ram_config.txbuf_dedicated_txbuf_elem_count = 0U;
-    cfg.ram_config.txbuf_fifo_or_queue_elem_count = MCAN_TXBUF_SIZE_CANFD_DEFAULT;
-    cfg.ram_config.txfifo_or_txqueue_mode = MCAN_TXBUF_OPERATION_MODE_QUEUE;
+    /*
+     * Keep the driver's default TX buffers: a TX FIFO (dedicated + FIFO
+     * elements, MCAN_TXBUF_OPERATION_MODE_FIFO) with the default element split.
+     *
+     * can_send() transmits with mcan_transmit_via_txfifo_nonblocking(), which
+     * requests the slot through TXFQS.TFQPI and waits on TXFQS.TFQF - both only
+     * meaningful in TX FIFO mode; the SDK documents that its behaviour "is not
+     * defined in TX Queue mode".  An earlier revision configured QUEUE mode
+     * with no dedicated buffers here, which silently dropped most transmitted
+     * frames (six frames sent, one on the bus).  The reference HPM port
+     * (candleLight_fw-hpm5321) also uses mcan_get_default_ram_config()
+     * untouched.  (To use a queue instead, the transmit path would have to call
+     * mcan_transmit_via_txqueue_nonblocking().)
+     */
     cfg.all_filters_config.std_id_filter_list.mcan_filter_elem_count = 0U;
     cfg.all_filters_config.ext_id_filter_list.mcan_filter_elem_count = 0U;
 
