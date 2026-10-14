@@ -24,6 +24,7 @@
 #include "timer.h"
 
 #include "board.h"          /* the board package (init_can_pins, ...) */
+#include "status_led.h"     /* per-channel state / traffic indication */
 #include "board_contract.h" /* declares board_init_can_clock() for every board */
 #include "hpm_clock_drv.h"
 #include "hpm_mcan_drv.h"
@@ -168,7 +169,23 @@ void can_enable(can_data_t *channel, uint32_t mode)
     cfg.enable_canfd = IS_ENABLED(CONFIG_CANFD);
     cfg.mode = node_mode;
     cfg.disable_auto_retransmission = (channel->channel.Init.AutoRetransmission == 0U);
-    cfg.enable_tdc = false;
+    /* Transmitter delay compensation (TDC) for the CAN FD data phase.
+     *
+     * Enabled exactly the way candleLight does it: turn it on and let the driver
+     * pick the SSP offset - mcan_apply_tdc_config() maps ssp_offset == 0 to
+     * "DTSEG1 + 1" mtq and uses the same value as the filter window, then writes
+     * TDCR and sets DBTP.TDC (candleLight enables TDC unconditionally in
+     * can_enable() through HAL_FDCAN_EnableTxDelayCompensation()).
+     *
+     * Note the driver then validates the data-phase timing with
+     * is_mcan_bit_timing_param_valid(..., true), which requires the data-phase
+     * prescaler (DBRP) to be <= 2 - at 80 MHz that refuses FD data rates below
+     * roughly 0.8 MHz (mcan_init() -> status_mcan_invalid_bit_timing, i.e. the
+     * channel will not start).  The usual 1/2/4/5 Mbit/s data rates are fine.
+     */
+    cfg.enable_tdc = true;
+    cfg.tdc_config.ssp_offset = 0U;          /* 0 = driver default (DTSEG1+1) */
+    cfg.tdc_config.filter_window_length = 0U;
 
     /* Hand candleLight's bit timing straight to the driver so the exact
      * prescaler / segment values requested by the host are programmed. */
@@ -177,13 +194,17 @@ void can_enable(can_data_t *channel, uint32_t mode)
     cfg.can_timing.num_seg1 = channel->channel.Init.NominalTimeSeg1;
     cfg.can_timing.num_seg2 = channel->channel.Init.NominalTimeSeg2;
     cfg.can_timing.num_sjw = channel->channel.Init.NominalSyncJumpWidth;
+    /* TDC is a data-phase feature: the driver validates the nominal timing
+     * with tdc_enable == false anyway, so this stays false. */
     cfg.can_timing.enable_tdc = false;
 
     cfg.canfd_timing.prescaler = channel->channel.Init.DataPrescaler;
     cfg.canfd_timing.num_seg1 = channel->channel.Init.DataTimeSeg1;
     cfg.canfd_timing.num_seg2 = channel->channel.Init.DataTimeSeg2;
     cfg.canfd_timing.num_sjw = channel->channel.Init.DataSyncJumpWidth;
-    cfg.canfd_timing.enable_tdc = false;
+    /* Drives the DBTP.TDC bit in the low-level timing write; mcan_init() then
+     * re-applies the full TDC configuration (see cfg.enable_tdc above). */
+    cfg.canfd_timing.enable_tdc = true;
 
     /* No identifier filter list: every frame goes to RX FIFO0. */
     mcan_get_default_ram_config(base, &cfg.ram_config, cfg.enable_canfd);
@@ -212,8 +233,12 @@ void can_enable(can_data_t *channel, uint32_t mode)
         if (config.phy_power_set) {
             config.phy_power_set(channel, true);
         }
+        /* Closed firmware behaviour: both LEDs of a started channel stay lit
+         * until the host stops it. */
+        status_led_channel((uint8_t)channel->nr, true);
     } else {
         channel->channel.State = HAL_FDCAN_STATE_READY;
+        status_led_channel((uint8_t)channel->nr, false);
     }
 }
 
@@ -229,6 +254,8 @@ void can_disable(can_data_t *channel)
     }
 
     channel->channel.State = HAL_FDCAN_STATE_READY;
+
+    status_led_channel((uint8_t)channel->nr, false);
 
     if (config.phy_power_set) {
         config.phy_power_set(channel, false);
@@ -253,6 +280,8 @@ bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
     if (mcan_read_rxfifo(base, 0U, &rx) != status_success) {
         return false;
     }
+
+    status_led_activity((uint8_t)channel->nr, true);
 
     rx_frame->channel = channel->nr;
     rx_frame->flags = 0U;
@@ -329,6 +358,8 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
     if (mcan_transmit_via_txfifo_nonblocking(base, &tx, NULL) != status_success) {
         return false;
     }
+
+    status_led_activity((uint8_t)channel->nr, false);
 
     return true;
 }

@@ -34,6 +34,12 @@
 #define BOARD_USB_IRQn      IRQn_USB0
 #define BOARD_HAS_SYS_LED   1 /* GPIOB[10], active high */
 
+/* WS2812 status LEDs: 8 LEDs driven over SPI1 (0xF0074000) with the data line
+ * on PA29 (SPI1_MOSI), exactly like the closed-source application.  The SPI
+ * instance/clock come from BOARD_APP_SPI_BASE / BOARD_APP_SPI_CLK_NAME below. */
+#define BOARD_HAS_WS2812        1
+#define BOARD_WS2812_LED_COUNT  8
+
 /* board_init_can_clock() (board.c) sources clk_can0..3 from clk_src_pll1_clk0,
  * so board_init_clock() keeps PLL1CLK0 at 800 MHz => 80 MHz CAN clock. */
 

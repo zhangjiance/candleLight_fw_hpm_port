@@ -56,6 +56,9 @@ THE SOFTWARE.
 #include "usbd_gs_can.h"
 #include "util.h"
 
+/* HPMicro: status LEDs on the board's WS2812 chain (src/status_led.c). */
+#include "status_led.h"
+
 static USBD_GS_CAN_HandleTypeDef hGS_CAN;
 static USBD_HandleTypeDef hUSB = {0};
 
@@ -86,6 +89,18 @@ int main(void)
 
 	config.setup(&hGS_CAN);
 	timer_init();
+
+	/*
+	 * Status LEDs on the board's WS2812 chain (src/status_led.c).  Called
+	 * unconditionally: on boards without a strip this is a no-op.
+	 *
+	 * Do NOT wrap this in "#if BOARD_HAS_WS2812": this file does not include
+	 * the board package header (boards/<BOARD>/board.h), so the macro is not
+	 * defined here and the guard silently removed the whole LED bring-up -
+	 * the strip then stayed dark for channel state and traffic alike.  The
+	 * board knowledge lives in ws2812.c instead.
+	 */
+	status_led_init();
 
 	INIT_LIST_HEAD(&hGS_CAN.list_frame_pool);
 	INIT_LIST_HEAD(&hGS_CAN.list_to_host);
@@ -138,6 +153,10 @@ int main(void)
 
 			led_update(&channel->leds);
 		}
+
+		/* Ages the per-channel traffic windows and repaints the WS2812
+		 * chain (throttled). */
+		status_led_tick();
 
 		if (USBD_GS_CAN_DfuDetachRequested(&hUSB)) {
 			dfu_run_bootloader();
