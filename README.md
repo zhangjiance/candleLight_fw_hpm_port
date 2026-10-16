@@ -32,7 +32,7 @@ Tested means "exercised on real hardware". Please read this table before filing 
 | Multi-channel (4 × MCAN) operation | **Verified on hardware** — all four channels, including a three node bus |
 | Bit timing / sample point | **Verified** — host-negotiated sample points land in `NBTP`/`DBTP` (checked 500k/2M and 1M/4M at 80 %) |
 | Per-channel terminal resistor switch | **Verified on hardware** — `GS_CAN_FEATURE_TERMINATION`, driven by `ip link set canX type can termination 120` |
-| Bus error reporting (`CAN_ERR_ACK` / `PROT` / `CRTL`, TEC/REC) | Implemented; all classes have been observed on a deliberately broken bus, a systematic regression pass is still missing |
+| Bus error reporting (`CAN_ERR_ACK` / `PROT` / `CRTL` / `BUSOFF` / `RESTARTED`, TEC/REC, RX overflow `GS_CAN_FLAG_OVERFLOW`) | Implemented; ACK/PROT/CRTL/BUSOFF have been observed on a deliberately broken bus; `RESTARTED` and the RX overflow flag are new and **not verified on hardware yet**, a systematic regression pass is still missing |
 | WS2812 TX/RX activity LEDs | **Not implemented** |
 | Throughput / stress testing | Not done |
 
@@ -42,7 +42,7 @@ The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `D
 
 | Item | What is left |
 | --- | --- |
-| Error reporting regression | Exercise every class systematically: `CAN_ERR_ACK`, `PROT` (stuff / form / bit / CRC), `CRTL` (warning, passive), `BUSOFF`, RX overrun, plus the TEC/REC fields in the payload and the LEC-transition de-duplication |
+| Error reporting regression | Exercise every class systematically: `CAN_ERR_ACK`, `PROT` (stuff / form / bit / CRC), `CRTL` (warning, passive), `BUSOFF`, `RESTARTED` (bus-off recovery), RX overrun (`GS_CAN_FLAG_OVERFLOW`), plus the TEC/REC fields in the payload |
 | Performance testing | Frames/s over USB High-Speed, multi-channel stress (`cangen` on several channels at once), `RX dropped/missed`, TX latency. USB is already HS, so the ceiling is the CAN bit rate and the per-frame host overhead, not the link |
 | WS2812 TX/RX LEDs | Still missing; `boards/hscant/` currently drives only the single `SYS_LED` on GPIOB[10] |
 
@@ -200,7 +200,7 @@ The HPM MCAN is a Bosch M_CAN, so `candleLight_fw/src/can/m_can.c` maps over alm
 | `HAL_FDCAN_GetRxMessage` | `mcan_read_rxfifo()` |
 | `HAL_FDCAN_GetRxFifoFillLevel` | `RXF0S.F0FL` |
 
-All queueing and linked-list work still happens in the unmodified `can_common.c` + `usbd_gs_can.c`.
+All queueing and linked-list work still happens in the unmodified `can_common.c` + `src/candle/usbd_gs_can.c` (a copy).
 
 Four things do not map over 1:1 and cost most of the debugging time:
 

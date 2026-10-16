@@ -32,7 +32,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | 多通道（4 路 MCAN） | **已在硬件上验证** —— 四路全测，含三节点共总线 |
 | 位定时 / 采样点 | **已验证** —— 主机协商的采样点确实落进 `NBTP`/`DBTP`（500k/2M 与 1M/4M @80% 均核对过） |
 | 四通道终端电阻开关 | **已在硬件上验证** —— `GS_CAN_FEATURE_TERMINATION`，用 `ip link set canX type can termination 120` 控制 |
-| 总线错误上报（`CAN_ERR_ACK` / `PROT` / `CRTL`，TEC/REC） | 已实现；各类错误都在故意做坏的总线上实际触发过，但系统化回归还没做 |
+| 总线错误上报（`CAN_ERR_ACK` / `PROT` / `CRTL` / `BUSOFF` / `RESTARTED`，TEC/REC，RX 溢出 `GS_CAN_FLAG_OVERFLOW`） | 已实现；ACK/PROT/CRTL/BUSOFF 在故意做坏的总线上实际触发过；`RESTARTED` 与 RX 溢出标志补齐后**尚未上板验证**，系统化回归也还没做 |
 | WS2812 收发指示灯驱动 | **未实现** |
 | 吞吐 / 压力测试 | 未做 |
 
@@ -42,7 +42,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 | 项目 | 还差什么 |
 | --- | --- |
-| 错误上报回归 | 逐类系统性验证：`CAN_ERR_ACK`、`PROT`（stuff / form / bit / CRC）、`CRTL`（warning、passive）、`BUSOFF`、RX overrun，以及 payload 里的 TEC/REC 和"仅在 LEC 变化时上报"的行为 |
+| 错误上报回归 | 逐类系统性验证：`CAN_ERR_ACK`、`PROT`（stuff / form / bit / CRC）、`CRTL`（warning、passive）、`BUSOFF`、`RESTARTED`（bus-off 恢复）、RX overrun（`GS_CAN_FLAG_OVERFLOW`），以及 payload 里的 TEC/REC |
 | 性能测试 | USB 高速下的帧速率、多通道同时打流、`RX dropped/missed`、TX 延迟。USB 已经是高速，所以瓶颈在 CAN 波特率与每帧的主机侧开销，而不是链路 |
 | WS2812 收发指示灯 | 尚未实现；`boards/hscant/` 目前只驱动 GPIOB[10] 上的 `SYS_LED` |
 
@@ -200,7 +200,7 @@ HPM 的 MCAN 就是 Bosch M_CAN，因此 `candleLight_fw/src/can/m_can.c` 几乎
 | `HAL_FDCAN_GetRxMessage` | `mcan_read_rxfifo()` |
 | `HAL_FDCAN_GetRxFifoFillLevel` | `RXF0S.F0FL` |
 
-所有排队与链表逻辑仍然发生在未修改的 `can_common.c` + `usbd_gs_can.c` 中。
+所有排队与链表逻辑仍然发生在未修改的 `can_common.c` 与 `src/candle/usbd_gs_can.c`（副本）中。
 
 有四处不能 1:1 对应，也最耗调试时间：
 

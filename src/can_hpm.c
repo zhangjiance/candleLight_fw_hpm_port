@@ -12,8 +12,21 @@
  *   HAL_FDCAN_GetRxMessage         -> mcan_read_rxfifo()
  *   HAL_FDCAN_GetRxFifoFillLevel   -> RXF0S.F0FL
  *
- * Frame queueing/linked-list logic lives in the unmodified
- * candleLight_fw sources (can_common.c + usbd_gs_can.c).
+ * Frame queueing/linked-list logic lives in candleLight_fw's can_common.c
+ * (compiled verbatim) and in the src/candle/ copy of usbd_gs_can.c.
+ *
+ * Deliberate deviations from m_can.c (everything else is line-by-line
+ * equivalent):
+ *   - CAN_ERR_RESTARTED is reported on the bus-off -> back-on-the-bus
+ *     transition, which m_can.c does not do,
+ *   - GS_CAN_FLAG_OVERFLOW is set on the frame that drains an overflowed RX
+ *     FIFO0 (IR.RF0L), which m_can.c does not do either,
+ *   - can_get_error_status() stays off PSR while its only caller would drop the
+ *     result (RX FIFO not empty): reading PSR consumes PSR.LEC, and the upstream
+ *     ordering reads first and bails out afterwards, which loses the error.  See
+ *     the comment on the function - this keeps can_common.c verbatim,
+ *   - can_has_error_status_changed() keeps m_can.c's semantics (a valid PSR.LEC
+ *     means a new error) - see the comment there.
  */
 
 #include <string.h>
@@ -327,6 +340,28 @@ bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
         rx_frame->classic_can_ts->timestamp_us = timestamp_us;
     }
 
+    /*
+     * RX FIFO 0 overflow.  The M_CAN sets IR.RF0L when a frame had to be dropped
+     * because the FIFO was full; gs_usb reports that on a data frame with
+     * GS_CAN_FLAG_OVERFLOW ("messages were lost around this one"), so the host
+     * can count it - without it the loss is invisible, the frames just never
+     * arrive.
+     *
+     * RXF0S.RF0L is only a copy of the interrupt flag and cannot be cleared
+     * directly, the write-1-to-clear has to go to IR.  Clearing it here means
+     * the host is told once per loss burst, and because the bit is sticky the
+     * notification survives until a frame is there to carry it (a full FIFO that
+     * drops everything until it is drained reports on the first frame that
+     * comes out of it).
+     *
+     * This is applied last on purpose: the CAN-FD branch above assigns
+     * rx_frame->flags.
+     */
+    if (0U != (mcan_get_interrupt_flags(base) & MCAN_IR_RF0L_MASK)) {
+        mcan_clear_interrupt_flags(base, MCAN_IR_RF0L_MASK);
+        rx_frame->flags |= GS_CAN_FLAG_OVERFLOW;
+    }
+
     return true;
 }
 
@@ -380,10 +415,32 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
 /* ------------------------------------------------------------------ */
 uint32_t can_get_error_status(can_data_t *channel)
 {
-    /* Nothing to reset: the hardware clears LEC on read. */
-    uint32_t psr = channel->channel.Instance->PSR;
+    /*
+     * The hardware hands PSR.LEC out exactly once: reading PSR clears the field
+     * (the SDK has 0 = "No error has occurred since the last CPU read of PSR"
+     * and 7 = "not written by the protocol engine since the last CPU read"), so
+     * nothing else has to be reset here.
+     *
+     * CAN_HandleError() - the only caller - reads this *before* it decides
+     * whether the result can be reported at all: it drops everything while the
+     * RX FIFO is not empty ("the best we can localize the errors to is after the
+     * last successfully received frame").  Reading PSR there would consume the
+     * error and throw it away, so while frames are pending hand back the status
+     * of the previous read instead, and leave the error latched in the hardware
+     * for the next call, after the FIFO has drained.  The caller's bus-off
+     * recovery keeps working on that value: PSR.BO stays set until the recovery
+     * sequence has finished, so it can be served one iteration later but never
+     * missed.
+     *
+     * This is what keeps candleLight_fw's can_common.c usable verbatim - the
+     * upstream ordering loses every error that shows up with a non-empty RX
+     * FIFO, and it cannot be told about that from the outside.
+     */
+    if (can_is_rx_pending(channel)) {
+        return channel->last_err;
+    }
 
-    return psr;
+    return channel->channel.Instance->PSR;
 }
 
 void can_manage_bus_off_recovery(can_data_t *channel, uint32_t err)
@@ -409,10 +466,21 @@ void can_manage_bus_off_recovery(can_data_t *channel, uint32_t err)
 
 bool can_has_error_status_changed(uint32_t last_err, uint32_t curr_err)
 {
-    uint8_t last_lec = (uint8_t)MCAN_PSR_LEC_GET(last_err);
     uint8_t curr_lec = (uint8_t)MCAN_PSR_LEC_GET(curr_err);
 
-    if (curr_lec != last_lec) {
+    /*
+     * A valid code means "an error happened since the previous read": the
+     * hardware hands PSR.LEC out exactly once and clears it on read (the SDK:
+     * 0 = "no error since the last CPU read of PSR", 7 = "not written by the
+     * protocol engine since the last CPU read").  So report it even when it is
+     * the same code as the previous read - that is a *new* error of the same
+     * type, not the old one.  Comparing curr_lec against the previous LEC (as an
+     * earlier revision of this port did) silently dropped exactly those repeats,
+     * which is how repeated stuff/ack errors on a broken bus go missing while
+     * the counters keep climbing.
+     */
+    if ((0x0U != curr_lec) && (0x7U != curr_lec)) {
+        /* An error is being reported in last error code field */
         return true;
     }
 
@@ -432,6 +500,16 @@ bool can_parse_error_status(can_data_t *channel, struct gs_host_frame *frame, ui
     frame->echo_id = 0xFFFFFFFFU;
     frame->can_id = CAN_ERR_FLAG;
     frame->can_dlc = CAN_ERR_DLC;
+    /*
+     * An error frame is always classic - nothing here sets GS_CAN_FLAG_FD - so
+     * the flag byte has to be cleared explicitly.  The frame pool hands buffers
+     * out with their previous contents (CAN_HandleError() returns them there
+     * after the transmit), can_receive() sets GS_CAN_FLAG_FD on them for CAN-FD
+     * frames, and USBD_GS_CAN_PrepareTransmit() picks the USB frame layout from
+     * that very bit: with a stale FD bit the error frame would go out in the
+     * CAN-FD layout (80 bytes with timestamps instead of 16).
+     */
+    frame->flags = 0U;
     frame->classic_can->data[0] = CAN_ERR_LOSTARB_UNSPEC;
     frame->classic_can->data[1] = CAN_ERR_CRTL_UNSPEC;
     frame->classic_can->data[2] = CAN_ERR_PROT_UNSPEC;
@@ -450,9 +528,24 @@ bool can_parse_error_status(can_data_t *channel, struct gs_host_frame *frame, ui
 
     if (curr_err & MCAN_PSR_BO_MASK) {
         if (!(last_err & MCAN_PSR_BO_MASK)) {
+            /* We transitioned to bus-off. */
             frame->can_id |= CAN_ERR_BUSOFF;
             should_send = true;
         }
+    } else if (last_err & MCAN_PSR_BO_MASK) {
+        /*
+         * Bus-off -> back on the bus: can_manage_bus_off_recovery() cleared
+         * CCCR.INIT and the controller has finished its recovery sequence, so it
+         * is part of the bus again.  Linux counts exactly this as a controller
+         * restart (sja1000 reports CAN_ERR_RESTARTED the same way), which is
+         * what `ip -details -statistics link show canX` shows as "re-started".
+         *
+         * The CRTL/ACTIVE edge below fires on the same transition and is kept:
+         * it carries the controller state in data[1] for hosts that read the
+         * error detail instead of the class bits alone.
+         */
+        frame->can_id |= CAN_ERR_RESTARTED;
+        should_send = true;
     }
 
     /* The Linux sja1000 driver puts the counters here. */
