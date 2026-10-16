@@ -155,7 +155,7 @@ int main(void)
 		}
 
 		/* Ages the per-channel traffic windows and repaints the WS2812
-		 * chain (throttled). */
+		 * chain (throttled).  Also blinks the plain-GPIO "running" LED. */
 		status_led_tick();
 
 		if (USBD_GS_CAN_DfuDetachRequested(&hUSB)) {

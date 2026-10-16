@@ -32,6 +32,12 @@
  * Boards without a strip (BOARD_HAS_WS2812 == 0) get LED_COUNT == 0 and all the
  * code below turns into no-ops, so the module can stay in the common source
  * list.
+ *
+ * Besides the strip, status_led_tick() also owns the plain-GPIO "running" LED
+ * that some boards carry (BOARD_HAS_SYS_LED, board_led_toggle()): it is toggled
+ * every SYS_LED_TOGGLE_MS, so a live main loop can be told from a dead one
+ * without a debugger.  Boards without such an LED skip it, and the toggling
+ * does not depend on the strip (LED_COUNT == 0 is fine).
  */
 
 #include "status_led.h"
@@ -61,6 +67,9 @@
 
 #define RENDER_MIN_INTERVAL_MS (10U)
 
+/* Plain-GPIO "running" LED: half period, i.e. 1 Hz / 50 % duty. */
+#define SYS_LED_TOGGLE_MS      (500U)
+
 /* Closed firmware index maths (FUN_ram_8002e2d0): channel c owns the chain LED
  * c for transmit and c + CHAN_LED_COUNT for receive. */
 #define CHAN_TX_LED(c)         ((uint32_t)(c))
@@ -78,6 +87,11 @@ static bool s_chan_on[CHAN_LED_COUNT > 0U ? CHAN_LED_COUNT : 1U];
 static uint32_t s_last_render_ms;
 static volatile bool s_dirty;
 static bool s_ready;
+
+/* Only boards with a plain-GPIO "running" LED keep the toggle timestamp. */
+#if defined(BOARD_HAS_SYS_LED) && BOARD_HAS_SYS_LED
+static uint32_t s_last_sys_led_ms;
+#endif
 
 static void compose(void)
 {
@@ -175,6 +189,15 @@ void status_led_tick(void)
             s_dirty = true;
         }
     }
+
+    /* "Running" LED heartbeat: independent of the strip, so a board with only
+     * this LED still gets it (LED_COUNT == 0). */
+#if defined(BOARD_HAS_SYS_LED) && BOARD_HAS_SYS_LED
+    if ((uint32_t)(now - s_last_sys_led_ms) >= SYS_LED_TOGGLE_MS) {
+        s_last_sys_led_ms = now;
+        board_led_toggle();
+    }
+#endif
 
     /*
      * s_dirty means "the strip is out of date"; it is cleared only once the

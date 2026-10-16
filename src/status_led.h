@@ -29,8 +29,9 @@ void status_led_channel(uint8_t channel, bool enabled);
  * transmitted one.  Safe to call before status_led_init(). */
 void status_led_activity(uint8_t channel, bool rx);
 
-/* Non-blocking: ages the traffic dark windows and pushes the frame to the strip
- * (throttled to RENDER_MIN_INTERVAL_MS). */
+/* Non-blocking: ages the traffic dark windows, toggles the plain-GPIO
+ * "running" LED (BOARD_HAS_SYS_LED) every SYS_LED_TOGGLE_MS and pushes the frame
+ * to the strip (throttled to RENDER_MIN_INTERVAL_MS). */
 void status_led_tick(void);
 
 #endif /* CANDLE_STATUS_LED_H */
