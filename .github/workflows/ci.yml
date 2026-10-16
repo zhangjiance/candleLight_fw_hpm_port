@@ -1,0 +1,165 @@
+name: ci
+
+# Build every release image on push/PR, and turn a v* tag into a GitHub release
+# with the flashable files attached.
+#
+# What CI has to provide, because none of it is in the repository or in the
+# runner image (see README_build.md):
+#   - the HPM SDK source tree, located through HPM_SDK_BASE
+#     (CMakeLists.txt: find_package(hpm-sdk REQUIRED HINTS $ENV{HPM_SDK_BASE}))
+#   - the riscv-none-elf toolchain, located through GNURISCV_TOOLCHAIN_PATH
+#   - the candleLight_fw submodule (actions/checkout fetches it)
+#   - python3, for the SDK's build helpers and tools/uf2conv.py (UF2 presets)
+# Both externals are pinned below to the versions this port is built and tested
+# with, so a CI run is reproducible instead of following a moving branch.
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HPM_SDK_REPO: https://github.com/hpmicro/hpm_sdk.git
+  HPM_SDK_TAG: v1.13.0
+  HPM_SDK_SHA: ccc5ec467a047f3ea85cd2fa4565e91db7135a38
+  XT_VERSION: 15.2.0-1
+  XT_DIR: xpack-riscv-none-elf-gcc-15.2.0-1
+
+jobs:
+  build:
+    name: build ${{ matrix.preset }}
+    runs-on: ubuntu-latest
+    strategy:
+      # report every preset, not just the first failure
+      fail-fast: false
+      matrix:
+        # one leg per image; debug presets are deliberately not built here
+        preset: [hscant-dfu, hscant-uf2]
+    steps:
+      - name: Check out (with the candleLight_fw submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore the RISC-V toolchain
+        id: xt
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/${{ env.XT_DIR }}
+          key: xt-${{ env.XT_VERSION }}-linux-x64
+
+      - name: Install the RISC-V toolchain
+        if: steps.xt.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          dest="${{ runner.temp }}/${XT_DIR}"
+          url=$(curl -fsSL \
+            "https://api.github.com/repos/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/tags/v${XT_VERSION}" \
+            | jq -r '.assets[].browser_download_url' | grep -m1 'linux-x64.tar.gz$')
+          echo "downloading $url"
+          curl -fsSL "$url" | tar -xz -C "${{ runner.temp }}"
+          test -x "$dest/bin/riscv-none-elf-gcc"
+          "$dest/bin/riscv-none-elf-gcc" --version | head -1
+
+      - name: Restore the HPM SDK
+        id: sdk
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hpm_sdk
+          key: hpm-sdk-${{ env.HPM_SDK_SHA }}
+
+      - name: Fetch the HPM SDK (pinned to ${{ env.HPM_SDK_TAG }})
+        if: steps.sdk.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 --branch "${HPM_SDK_TAG}" \
+            "${HPM_SDK_REPO}" "${{ runner.temp }}/hpm_sdk"
+          # the tag must still point at the commit this project was built against
+          test "$(git -C "${{ runner.temp }}/hpm_sdk" rev-parse HEAD)" = "${HPM_SDK_SHA}"
+
+      - name: Configure and build
+        env:
+          HPM_SDK_BASE: ${{ runner.temp }}/hpm_sdk
+          GNURISCV_TOOLCHAIN_PATH: ${{ runner.temp }}/${{ env.XT_DIR }}
+        run: |
+          set -euo pipefail
+          echo "${GNURISCV_TOOLCHAIN_PATH}/bin" >> "$GITHUB_PATH"
+          cmake --version | head -1
+          ninja --version
+          python3 --version
+
+          cmake --preset "${{ matrix.preset }}"
+          cmake --build --preset "${{ matrix.preset }}" 2>&1 | tee build.log
+
+          # Project sources have to stay warning clean.  What is excluded is
+          # code this project does not own: the SDK, CherryUSB and the verbatim
+          # upstream copies (the submodule and src/candle/).
+          if grep -E "warning:" build.log \
+               | grep -vE "(hpm_sdk|cherryusb|candleLight_fw|src/candle)/"; then
+            echo "::error::compiler warnings in the project sources"
+            exit 1
+          fi
+
+      - name: Size report
+        env:
+          GNURISCV_TOOLCHAIN_PATH: ${{ runner.temp }}/${{ env.XT_DIR }}
+        run: |
+          "${GNURISCV_TOOLCHAIN_PATH}/bin/riscv-none-elf-size" \
+            "build/${{ matrix.preset }}/output/candle_usb2canfd.elf" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the images
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.preset }}
+          if-no-files-found: error
+          path: |
+            build/${{ matrix.preset }}/output/candle_usb2canfd.elf
+            build/${{ matrix.preset }}/output/candle_usb2canfd.bin
+            build/${{ matrix.preset }}/output/candle_usb2canfd.hex
+            build/${{ matrix.preset }}/output/candle_usb2canfd.map
+            build/${{ matrix.preset }}/output/candle_usb2canfd.uf2
+
+  release:
+    name: publish ${{ github.ref_name }}
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release create
+    steps:
+      - name: Download the images
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          # both presets build candle_usb2canfd.*, so they get one archive each
+          for p in hscant-dfu hscant-uf2; do
+            test -f "artifacts/$p/candle_usb2canfd.elf"
+            (cd "artifacts/$p" && zip -q -r "../../candle_usb2canfd-$p.zip" .)
+          done
+          sha256sum candle_usb2canfd-*.zip > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            candle_usb2canfd-hscant-dfu.zip \
+            candle_usb2canfd-hscant-uf2.zip \
+            sha256sums.txt
