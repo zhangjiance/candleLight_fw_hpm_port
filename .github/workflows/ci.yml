@@ -62,11 +62,13 @@ jobs:
         run: |
           set -euo pipefail
           dest="${{ runner.temp }}/${XT_DIR}"
-          url=$(curl -fsSL \
+          # --retry: these are two large downloads from a shared CDN
+          url=$(curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 \
             "https://api.github.com/repos/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/tags/v${XT_VERSION}" \
             | jq -r '.assets[].browser_download_url' | grep -m1 'linux-x64.tar.gz$')
           echo "downloading $url"
-          curl -fsSL "$url" | tar -xz -C "${{ runner.temp }}"
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 "$url" \
+            | tar -xz -C "${{ runner.temp }}"
           test -x "$dest/bin/riscv-none-elf-gcc"
           "$dest/bin/riscv-none-elf-gcc" --version | head -1
 
@@ -195,16 +197,43 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           # a release candidate stays a pre-release instead of becoming "latest"
           pre=""
-          case "${GITHUB_REF_NAME}" in
+          case "${TAG}" in
             *-rc*|*-beta*|*-alpha*) pre="--prerelease" ;;
           esac
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes ${pre} \
-            candle_usb2canfd-hscant-dfu.zip \
-            candle_usb2canfd-hscant-uf2.zip \
-            sha256sums.txt
+          files=(candle_usb2canfd-hscant-dfu.zip candle_usb2canfd-hscant-uf2.zip sha256sums.txt)
+
+          # GitHub answers 5xx and timeouts from time to time; retry those
+          # instead of failing a release that is otherwise fine.
+          retry() {
+            local attempt=1
+            until "$@"; do
+              if [ "${attempt}" -ge 3 ]; then
+                echo "::error::$1 failed ${attempt} times"
+                return 1
+              fi
+              sleep $((attempt * 10))
+              attempt=$((attempt + 1))
+            done
+          }
+
+          # Idempotent on purpose: a release that a previous run created and then
+          # died on (a 504 while uploading, an expired token, ...) must not make
+          # the next run fail with "already exists" - only the assets matter.
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "release ${TAG} already exists, making sure the assets are there"
+            retry gh release upload "${TAG}" "${files[@]}" --clobber
+          else
+            retry gh release create "${TAG}" \
+              --title "${TAG}" \
+              --generate-notes ${pre} \
+              "${files[@]}"
+          fi
+
+          retry gh release view "${TAG}" \
+            --json tagName,isPrerelease,assets \
+            --jq '"\(.tagName) prerelease=\(.isPrerelease) assets=\([.assets[].name] | join(", "))"'
