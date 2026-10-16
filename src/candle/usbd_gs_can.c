@@ -185,7 +185,9 @@ static const uint8_t USBD_MS_EXT_PROP_FEATURE_DESC[] = {
 
 static const struct gs_device_config USBD_GS_CAN_dconf = {
 	.icount = NUM_CAN_CHANNEL - 1,
-	.sw_version = 2,
+	/* bump per release: major<<16 | minor<<8 | patch, the value CI checks
+	 * against the git tag (a host shows it as FW x.y.z) */
+	.sw_version = 0x000001,
 	.hw_version = 1,
 };
 
