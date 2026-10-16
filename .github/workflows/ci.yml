@@ -183,15 +183,18 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package
+      - name: Collect the release files
         run: |
           set -euo pipefail
-          # both presets build candle_usb2canfd.*, so they get one archive each
-          for p in hscant-dfu hscant-uf2; do
-            test -f "artifacts/$p/candle_usb2canfd.elf"
-            (cd "artifacts/$p" && zip -q -r "../../candle_usb2canfd-$p.zip" .)
-          done
-          sha256sum candle_usb2canfd-*.zip > sha256sums.txt
+          # No archives, and no debug formats: the two flashable images exactly as
+          # the build emits them - the DFU image's raw .bin (dfu-util -D) and the
+          # UF2 image's .uf2 (drop it on the bootloader's MSC volume).  Note the
+          # .bin of the uf2 preset is a different image, hence the explicit pick.
+          test -f "artifacts/hscant-dfu/candle_usb2canfd.bin"
+          test -f "artifacts/hscant-uf2/candle_usb2canfd.uf2"
+          cp artifacts/hscant-dfu/candle_usb2canfd.bin .
+          cp artifacts/hscant-uf2/candle_usb2canfd.uf2 .
+          sha256sum candle_usb2canfd.bin candle_usb2canfd.uf2 > sha256sums.txt
           cat sha256sums.txt
 
       - name: Create the release
@@ -205,7 +208,7 @@ jobs:
           case "${TAG}" in
             *-rc*|*-beta*|*-alpha*) pre="--prerelease" ;;
           esac
-          files=(candle_usb2canfd-hscant-dfu.zip candle_usb2canfd-hscant-uf2.zip sha256sums.txt)
+          files=(candle_usb2canfd.bin candle_usb2canfd.uf2 sha256sums.txt)
 
           # GitHub answers 5xx and timeouts from time to time; retry those
           # instead of failing a release that is otherwise fine.
