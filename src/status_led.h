@@ -29,9 +29,16 @@ void status_led_channel(uint8_t channel, bool enabled);
  * transmitted one.  Safe to call before status_led_init(). */
 void status_led_activity(uint8_t channel, bool rx);
 
-/* Non-blocking: ages the traffic dark windows, toggles the plain-GPIO
- * "running" LED (BOARD_HAS_SYS_LED) every SYS_LED_TOGGLE_MS and pushes the frame
- * to the strip (throttled to RENDER_MIN_INTERVAL_MS). */
+/* Non-blocking: plays the boot animation, ages the traffic dark windows, toggles
+ * the plain-GPIO "running" LED (BOARD_HAS_SYS_LED) every SYS_LED_TOGGLE_MS and
+ * pushes the frame to the strip (throttled to RENDER_MIN_INTERVAL_MS). */
 void status_led_tick(void);
+
+/* Start the boot animation: a rainbow comet that sweeps the strip ANIM_SWEEPS
+ * times and leaves it dark for the normal channel indication.  Non-blocking -
+ * it is paced by status_led_tick(), which has to be called from the main loop
+ * for it to move.  Call after status_led_init(); a no-op on boards without a
+ * strip. */
+void status_led_boot_anim(void);
 
 #endif /* CANDLE_STATUS_LED_H */

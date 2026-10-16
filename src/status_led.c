@@ -38,6 +38,12 @@
  * every SYS_LED_TOGGLE_MS, so a live main loop can be told from a dead one
  * without a debugger.  Boards without such an LED skip it, and the toggling
  * does not depend on the strip (LED_COUNT == 0 is fine).
+ *
+ * The third thing here is the boot animation (status_led_boot_anim), the
+ * single-click comet of feat/hscant-mode-ws2812: a rainbow head sweeps the
+ * strip twice and the LEDs behind it fade out.  It is started by main.c right
+ * after status_led_init() and paced by status_led_tick(), so the strip is only
+ * occupied for the first ~1 s instead of blocking the boot.
  */
 
 #include "status_led.h"
@@ -70,6 +76,14 @@
 /* Plain-GPIO "running" LED: half period, i.e. 1 Hz / 50 % duty. */
 #define SYS_LED_TOGGLE_MS      (500U)
 
+/* Boot animation: the comet from feat/hscant-mode-ws2812's single-click show
+ * (status_led_click_show()).  The head sweeps LED 0 -> 7 -> 0 ANIM_SWEEPS
+ * times, one step every ANIM_FRAME_MS; the tail halves per LED behind the head
+ * (ANIM_COMET_V >> behind), so it fades out after 5 LEDs. */
+#define ANIM_FRAME_MS          (30U)
+#define ANIM_SWEEPS            (2U)
+#define ANIM_COMET_V           (0x20U)
+
 /* Closed firmware index maths (FUN_ram_8002e2d0): channel c owns the chain LED
  * c for transmit and c + CHAN_LED_COUNT for receive. */
 #define CHAN_TX_LED(c)         ((uint32_t)(c))
@@ -88,10 +102,36 @@ static uint32_t s_last_render_ms;
 static volatile bool s_dirty;
 static bool s_ready;
 
+/* Boot animation (status_led_boot_anim): frames left to paint, the frame index
+ * (which sets the colour and the head position) and when the next one is due. */
+static uint32_t s_comet_left;
+static uint32_t s_comet_frame;
+static uint32_t s_comet_next_ms;
+
 /* Only boards with a plain-GPIO "running" LED keep the toggle timestamp. */
 #if defined(BOARD_HAS_SYS_LED) && BOARD_HAS_SYS_LED
 static uint32_t s_last_sys_led_ms;
 #endif
+
+/* 8 bit HSV -> RGB (h: 0..255 = 0..360 deg).  Verbatim from
+ * feat/hscant-mode-ws2812, where it colourises the comet. */
+static void hsv2rgb(uint8_t h, uint8_t s, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    const uint8_t region = (uint8_t)(h / 43U);
+    const uint8_t rem = (uint8_t)((h - (region * 43U)) * 6U);
+    const uint8_t p = (uint8_t)(((uint32_t)v * (255U - s)) >> 8);
+    const uint8_t q = (uint8_t)(((uint32_t)v * (255U - (((uint32_t)s * rem) >> 8))) >> 8);
+    const uint8_t t = (uint8_t)(((uint32_t)v * (255U - (((uint32_t)s * (255U - rem)) >> 8))) >> 8);
+
+    switch (region) {
+    case 0U: *r = v; *g = t; *b = p; break;
+    case 1U: *r = q; *g = v; *b = p; break;
+    case 2U: *r = p; *g = v; *b = t; break;
+    case 3U: *r = p; *g = q; *b = v; break;
+    case 4U: *r = t; *g = p; *b = v; break;
+    default: *r = v; *g = p; *b = q; break;
+    }
+}
 
 static void compose(void)
 {
@@ -122,6 +162,48 @@ void status_led_init(void)
     ws2812_fill(0U, 0U, 0U);
     ws2812_update(true);
     s_ready = true;
+}
+
+/*
+ * One frame of the boot comet.  The head position bounces between the two ends
+ * of the strip (frame % 2 * LED_COUNT is a full round trip) and the LEDs behind
+ * it are the tail, each one dimmer than the one in front; the colour is taken
+ * from the frame counter and the LED index, which is what makes the rainbow
+ * flow while the head moves.
+ */
+static void comet_render(uint32_t frame)
+{
+    const uint32_t phase = frame % (2U * LED_COUNT);
+    const uint32_t head = (phase < LED_COUNT) ? phase : ((2U * LED_COUNT) - 1U - phase);
+
+    for (uint32_t led = 0U; led < LED_COUNT; led++) {
+        uint8_t r = 0U;
+        uint8_t g = 0U;
+        uint8_t b = 0U;
+
+        if (led <= head) {
+            const uint32_t behind = head - led;
+
+            if (behind <= 4U) {
+                hsv2rgb((uint8_t)((frame * 20U) + (uint8_t)(led * 12U)), 255U,
+                        (uint8_t)(ANIM_COMET_V >> behind), &r, &g, &b);
+            }
+        }
+        ws2812_set_pixel(led, r, g, b);
+    }
+
+    ws2812_update(true);
+}
+
+void status_led_boot_anim(void)
+{
+    if ((!s_ready) || (LED_COUNT == 0U)) {
+        return;
+    }
+
+    s_comet_left = (2U * LED_COUNT) * ANIM_SWEEPS;
+    s_comet_frame = 0U;
+    s_comet_next_ms = HAL_GetTick();
 }
 
 void status_led_channel(uint8_t channel, bool enabled)
@@ -183,21 +265,44 @@ void status_led_tick(void)
         return;
     }
 
-    for (uint32_t i = 0U; i < LED_COUNT; i++) {
-        if (s_off_active[i] && ((int32_t)(now - s_off_until[i]) >= 0)) {
-            s_off_active[i] = false; /* dark window over: LED back on */
-            s_dirty = true;
-        }
-    }
-
     /* "Running" LED heartbeat: independent of the strip, so a board with only
-     * this LED still gets it (LED_COUNT == 0). */
+     * this LED still gets it (LED_COUNT == 0), and it keeps blinking while the
+     * boot comet below owns the strip. */
 #if defined(BOARD_HAS_SYS_LED) && BOARD_HAS_SYS_LED
     if ((uint32_t)(now - s_last_sys_led_ms) >= SYS_LED_TOGGLE_MS) {
         s_last_sys_led_ms = now;
         board_led_toggle();
     }
 #endif
+
+    /* Boot animation: while it runs it owns the strip, so the traffic
+     * housekeeping and the repaint below are skipped - the composed frame (all
+     * dark at boot) would overwrite the comet otherwise.
+     *
+     * The next deadline is re-based on the current time instead of accumulating
+     * ANIM_FRAME_MS (as the original show does): the animation is armed before
+     * the rest of the boot, so the first tick can be milliseconds later - an
+     * accumulated deadline would consider all 32 frames overdue and flash them
+     * in as many consecutive loop iterations, i.e. in microseconds. */
+    if (s_comet_left > 0U) {
+        if ((int32_t)(now - s_comet_next_ms) >= 0) {
+            s_comet_next_ms = now + ANIM_FRAME_MS;
+            comet_render(s_comet_frame);
+            s_comet_frame++;
+            s_comet_left--;
+            if (s_comet_left == 0U) {
+                s_dirty = true; /* animation over: back to the channel state */
+            }
+        }
+        return;
+    }
+
+    for (uint32_t i = 0U; i < LED_COUNT; i++) {
+        if (s_off_active[i] && ((int32_t)(now - s_off_until[i]) >= 0)) {
+            s_off_active[i] = false; /* dark window over: LED back on */
+            s_dirty = true;
+        }
+    }
 
     /*
      * s_dirty means "the strip is out of date"; it is cleared only once the

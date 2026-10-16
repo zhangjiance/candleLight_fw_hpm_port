@@ -102,6 +102,14 @@ int main(void)
 	 */
 	status_led_init();
 
+	/*
+	 * PORT SEAM (HPMicro): boot animation - the rainbow comet that
+	 * feat/hscant-mode-ws2812 plays on a button single-click, played here
+	 * right at start-up.  Non-blocking: it is paced by status_led_tick()
+	 * below, so CAN/USB bring-up is not delayed by it.
+	 */
+	status_led_boot_anim();
+
 	INIT_LIST_HEAD(&hGS_CAN.list_frame_pool);
 	INIT_LIST_HEAD(&hGS_CAN.list_to_host);
 
@@ -122,11 +130,23 @@ int main(void)
 				 led_config[LED_RX].port, led_config[LED_RX].pin, led_config[LED_RX].active_high, led_config[LED_RX].invert,
 				 led_config[LED_TX].port, led_config[LED_TX].pin, led_config[LED_TX].active_high, led_config[LED_TX].invert);
 
-		/* nice wake-up pattern */
-		for (uint8_t j = 0; j < 10; j++) {
-			HAL_GPIO_TogglePin(led_config[LED_RX].port, led_config[LED_RX].pin);
-			HAL_Delay(50);
-			HAL_GPIO_TogglePin(led_config[LED_TX].port, led_config[LED_TX].pin);
+		/*
+		 * PORT SEAM (HPMicro): the "nice wake-up pattern" is only worth
+		 * anything on a board that really wires RX/TX LEDs to GPIOs.
+		 * config.channels[] comes from src/port_board.c, which leaves
+		 * leds[].port at NULL on the HPMicro boards (their indication is
+		 * the WS2812 chain, + a "running" LED), and HAL_GPIO_TogglePin()
+		 * is a no-op then - the loop would just burn 10 x 50 ms per
+		 * channel.  With 4 channels that is 2 s of a dark strip at every
+		 * boot, before the main loop - and with it the boot animation -
+		 * can start.
+		 */
+		if (led_config[LED_RX].port != NULL) {
+			for (uint8_t j = 0; j < 10; j++) {
+				HAL_GPIO_TogglePin(led_config[LED_RX].port, led_config[LED_RX].pin);
+				HAL_Delay(50);
+				HAL_GPIO_TogglePin(led_config[LED_TX].port, led_config[LED_TX].pin);
+			}
 		}
 
 		led_set_mode(&channel->leds, LED_MODE_OFF);

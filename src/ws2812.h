@@ -10,7 +10,8 @@
  *
  * which is exactly what a WS2812B expects at 1.25 us per bit; the byte order on
  * the wire is G, R, B.  SPI is used instead of a bit-banged/GPTMR+DMA scheme,
- * so the only per-frame cost is one DMA-driven 192 byte transfer.
+ * so the only per-frame cost is one DMA-driven 192 byte transfer, plus a low
+ * ("reset") trailer that lets the strip latch the frame (ws2812.c).
  */
 #ifndef CANDLE_WS2812_H
 #define CANDLE_WS2812_H
@@ -28,10 +29,13 @@ void ws2812_set_pixel(uint32_t index, uint8_t r, uint8_t g, uint8_t b);
 void ws2812_fill(uint8_t r, uint8_t g, uint8_t b);
 
 /* Re-encode the frame buffer and hand it to SPI.  With blocking == true the
- * call returns once the transfer has completed. */
+ * call returns once the transfer has completed.  Either way the call first waits
+ * for the previous frame to leave the SPI, so two consecutive calls are safe
+ * and each frame is latched by the strip. */
 void ws2812_update(bool blocking);
 
-/* True while a transfer is still in flight. */
+/* True while the SPI DMA of the last frame is still in flight (the frame may
+ * still be shifting out of the SPI FIFO after that - see ws2812_update). */
 bool ws2812_is_busy(void);
 
 #endif /* CANDLE_WS2812_H */
