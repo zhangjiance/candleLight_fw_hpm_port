@@ -81,7 +81,7 @@
  * times, one step every ANIM_FRAME_MS; the tail halves per LED behind the head
  * (ANIM_COMET_V >> behind), so it fades out after 5 LEDs. */
 #define ANIM_FRAME_MS          (30U)
-#define ANIM_SWEEPS            (2U)
+#define ANIM_SWEEPS            (1U)
 #define ANIM_COMET_V           (0x20U)
 
 /* Closed firmware index maths (FUN_ram_8002e2d0): channel c owns the chain LED
