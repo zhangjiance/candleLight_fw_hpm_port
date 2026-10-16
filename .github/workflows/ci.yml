@@ -90,14 +90,19 @@ jobs:
         env:
           HPM_SDK_BASE: ${{ runner.temp }}/hpm_sdk
           GNURISCV_TOOLCHAIN_PATH: ${{ runner.temp }}/${{ env.XT_DIR }}
+          # Release tags carry their version into the image (the firmware
+          # publishes it through bl_setting); branch builds stay on 0.0.0.
+          BL_SETTING_APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.0.0' }}
         run: |
           set -euo pipefail
           echo "${GNURISCV_TOOLCHAIN_PATH}/bin" >> "$GITHUB_PATH"
           cmake --version | head -1
           ninja --version
           python3 --version
+          echo "BL_SETTING_APP_VERSION=${BL_SETTING_APP_VERSION}"
 
-          cmake --preset "${{ matrix.preset }}"
+          cmake --preset "${{ matrix.preset }}" \
+            -DBL_SETTING_APP_VERSION="${BL_SETTING_APP_VERSION}"
           cmake --build --preset "${{ matrix.preset }}" 2>&1 | tee build.log
 
           # Project sources have to stay warning clean.  What is excluded is
@@ -136,6 +141,41 @@ jobs:
     permissions:
       contents: write # gh release create
     steps:
+      # gh resolves the repository through git, so this job needs a checkout:
+      # without one, release creation dies with "not a git repository".
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The tag is the version.  The image must not claim a different one, and
+      # the field checked here is exactly what a host reads for "FW x.y.z"
+      # (major<<16 | minor<<8 | patch, see the WebUI's _bcdToVersion).
+      - name: Check the tag against the reported firmware version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          tag="${tag%%-*}" # v1.1.0-rc1 -> 1.1.0
+          IFS=. read -r major minor patch <<< "$tag"
+          for n in "$major" "$minor" "$patch"; do
+            if [ -z "$n" ] || [ "$n" -gt 255 ]; then
+              echo "::error::the tag must look like v<major>.<minor>.<patch> (got ${GITHUB_REF_NAME})"
+              exit 1
+            fi
+          done
+          want=$(( (major << 16) | (minor << 8) | patch ))
+
+          src=src/candle/usbd_gs_can.c
+          got=$(sed -n 's/.*\.sw_version[[:space:]]*=[[:space:]]*\([^,]*\),.*/\1/p' "$src" | head -1)
+          if [ -z "$got" ]; then
+            echo "::error::no .sw_version found in $src"
+            exit 1
+          fi
+          if [ "$((got))" -ne "$want" ]; then
+            printf '::error file=%s::reports sw_version=%s (%s) but the tag is %s (%s) - bump it and re-tag\n' \
+              "$src" "$got" "$(printf '0x%08X' "$((got))")" "${GITHUB_REF_NAME}" "$(printf '0x%08X' "$want")"
+            exit 1
+          fi
+          echo "version check ok: ${GITHUB_REF_NAME} -> sw_version $(printf '0x%08X' "$want")"
+
       - name: Download the images
         uses: actions/download-artifact@v4
         with:
@@ -157,9 +197,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # a release candidate stays a pre-release instead of becoming "latest"
+          pre=""
+          case "${GITHUB_REF_NAME}" in
+            *-rc*|*-beta*|*-alpha*) pre="--prerelease" ;;
+          esac
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --generate-notes ${pre} \
             candle_usb2canfd-hscant-dfu.zip \
             candle_usb2canfd-hscant-uf2.zip \
             sha256sums.txt

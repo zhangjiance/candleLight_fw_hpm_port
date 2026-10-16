@@ -167,6 +167,7 @@ Key build configuration (see `CMakeLists.txt`):
 - `-DBOARD_<name> -DSTM32G4` — `STM32G4` is only used as a **selector** for candleLight's FDCAN code paths (`can.h`, `device.h`); no STM32 HAL is compiled;
 - `sdk_ld_options("--specs=nano.specs")` plus `HPM_SDK_LD_NO_NANO_SPECS=1`, so the SDK does not force `-u _printf_float` / `-u _scanf_float`;
 - `version.h` is generated at configure time with `GIT_HASH` (candleLight's `config.h` needs it);
+- `-DBL_SETTING_APP_VERSION=x.y.z` (default `0.0.0`) is the application version published to the bootloader through the shared `bl_setting` block; the release workflow passes the git tag, locally you can pass it yourself (`v1.0.9` and `1.1.0-rc1` are accepted, the tag without its `v` is what ends up in the block);
 - Release builds add `-DNDEBUG`.
 
 ### 4.1 A note on `board.h` and the generated include directory

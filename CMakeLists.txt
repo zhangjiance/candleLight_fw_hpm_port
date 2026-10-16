@@ -88,6 +88,28 @@ endif()
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/version.h "#define GIT_HASH \"${GIT_HASH}\"\n")
 
 # ---------------------------------------------------------------------------
+# Application version, as published to the bootloader through the shared
+# bl_setting block (src/bl_setting.c writes app_version.major/minor/patch).
+# Pass a release number - a release tag can be handed over as is, a leading "v"
+# and a pre-release suffix are accepted:
+#
+#     -DBL_SETTING_APP_VERSION=1.0.9      -DBL_SETTING_APP_VERSION=v1.0.9
+#     -DBL_SETTING_APP_VERSION=1.1.0-rc1
+#
+# Defaults to 0.0.0, which is what every non-release build reports.
+# ---------------------------------------------------------------------------
+set(BL_SETTING_APP_VERSION "0.0.0" CACHE STRING "Application version (x.y.z), published through bl_setting")
+if(BL_SETTING_APP_VERSION MATCHES "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+    sdk_compile_definitions(
+        -DBL_SETTING_APP_VERSION_MAJOR=${CMAKE_MATCH_1}
+        -DBL_SETTING_APP_VERSION_MINOR=${CMAKE_MATCH_2}
+        -DBL_SETTING_APP_VERSION_PATCH=${CMAKE_MATCH_3})
+else()
+    message(FATAL_ERROR
+        "BL_SETTING_APP_VERSION must look like x.y.z, got '${BL_SETTING_APP_VERSION}'")
+endif()
+
+# ---------------------------------------------------------------------------
 # candleLight_fw include path, with board.h excluded.
 #
 # candleLight_fw/include/board.h describes candleLight's board abstraction,
