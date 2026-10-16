@@ -1,20 +1,3 @@
-/*
- * bl_setting.h - bootloader <-> application hand-shake block.
- *
- * The stock UF2 / MSC bootloader shipped on the device (a CherryDAP "bootuf2"
- * derivative, see CherryDAP projects/HSLink-Pro/common/BL_Setting_Common.h)
- * keeps a small uninitialised block in the last 512 bytes of AHB_SRAM.  It is
- * retentive across a software reset, so the application uses it to:
- *
- *   - clear fail_cnt once it is up and running (otherwise the bootloader
- *     falls back to UF2 mode after it counted too many unsuccessful boots),
- *   - set keep_bootloader = 1 to have the bootloader stay in UF2 mode on the
- *     next boot (the "reboot to bootloader" request).
- *
- * The layout below must stay binary compatible with the bootloader.  It is used
- * for HPM_BUILD_TYPE=flash_uf2 images only; the hpm_dfu_boot path uses the
- * BGPR magic in src/dfu_hpm.c instead.
- */
 #ifndef CANDLE_BL_SETTING_H
 #define CANDLE_BL_SETTING_H
 
@@ -48,8 +31,7 @@ typedef struct {
 /* Pointer to the shared block (never NULL; AHB_SRAM is always mapped). */
 bl_setting_t *bl_setting(void);
 
-/* Validate the magic, clear fail_cnt and publish the application version.
- * Call once early in the application bring-up (HAL_Init). */
+/* Validate the magic, clear fail_cnt, publish the version; call early in HAL_Init(). */
 void bl_setting_app_init(void);
 
 /* Ask the bootloader for UF2 mode on the next boot. */

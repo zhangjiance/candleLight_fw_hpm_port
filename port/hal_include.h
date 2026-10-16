@@ -1,16 +1,3 @@
-/*
- * hal_include.h - platform seam for candleLight_fw on HPMicro HPM5361.
- *
- * candleLight_fw's headers (can.h, led.h, gpio.h) expect an STM32 style HAL:
- *   - FDCAN_GlobalTypeDef / FDCAN_HandleTypeDef   (used by can.h)
- *   - GPIO_PIN_SET / GPIO_PIN_RESET, HAL_GPIO_WritePin / TogglePin (led.c, main.c)
- *   - HAL_GetTick() / HAL_Delay()                 (led.c, main.c)
- *   - UNUSED()                                    (usbd_gs_can.c)
- *
- * Everything the CAN data path needs is implemented in src/can_hpm.c on top of
- * the hpm_sdk MCAN driver / MCAN registers.  FDCAN_HandleTypeDef below is only
- * the per-channel handle embedded in can.h's can_data_t.
- */
 
 #pragma once
 
@@ -33,8 +20,7 @@ typedef enum {
     GPIO_PIN_SET,
 } GPIO_PinState;
 
-/* HPM has one GPIO controller (HPM_GPIO0) with several ports ("groups").
- * A GPIO_TypeDef describes a single pad. */
+/* HPM has one GPIO controller (HPM_GPIO0) with several ports; a GPIO_TypeDef is one pad. */
 typedef struct {
     GPIO_Type *ctrl;  /* HPM_GPIO0 / HPM_FGPIO */
     uint32_t group;   /* port index, e.g. GPIO_DO_GPIOB */

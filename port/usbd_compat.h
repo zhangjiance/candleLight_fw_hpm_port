@@ -1,15 +1,3 @@
-/*
- * usbd_compat.h - STM32 USB Device (USBD) compatibility layer.
- *
- * candleLight_fw's src/usbd_gs_can.c is written against the STM32 USB Device
- * Library.  Instead of re-implementing its frame/linked-list engine we keep
- * that file (and can_common.c) and provide here only the *types, constants and
- * entry points* the STM32 library would have provided.  The functions are
- * implemented in src/usbd_bridge.c on top of CherryUSB.
- *
- * Definitions are taken verbatim from
- *   candleLight_fw/libs/STM32_USB_Device_Library/Core/Inc/usbd_def.h
- */
 
 #pragma once
 
@@ -79,8 +67,7 @@
 #define USBD_EP_TYPE_BULK 0x02U
 #define USBD_EP_TYPE_INTR 0x03U
 
-/* Same values as candleLight_fw/include/usbd_conf.h (guarded so that the
- * unmodified usbd_conf.h can be included alongside this header). */
+/* Same values as candleLight_fw's usbd_conf.h, guarded so it can be included alongside. */
 #ifndef USBD_MAX_NUM_CONFIGURATION
 #define USBD_MAX_NUM_CONFIGURATION 1
 #endif

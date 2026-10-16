@@ -1,17 +1,3 @@
-/*
- * status_led.h - owner of the board's WS2812 chain.
- *
- * Recovered from the closed-source image, the strip shows two things at once:
- *
- *  - per channel state: while the host keeps a CAN channel started, both of
- *    that channel's LEDs stay lit (transmit green, receive blue), and
- *  - per channel traffic: every frame forces the matching LED dark for 30 ms
- *    before it comes back on, so sustained traffic flickers.
- *
- * src/can_hpm.c reports channel start/stop through status_led_channel() and the
- * frames through status_led_activity(); status_led_tick() is called once per
- * main loop iteration and owns the render throttle.
- */
 #ifndef CANDLE_STATUS_LED_H
 #define CANDLE_STATUS_LED_H
 
@@ -21,24 +7,16 @@
 /* Bring the strip up (SPI1 + DMA) and blank it.  Needs the DMA manager up. */
 void status_led_init(void);
 
-/* Report that the host started (or stopped) a CAN channel.  While a channel is
- * started its two LEDs stay lit.  Safe to call before status_led_init(). */
+/* Report a channel start/stop (both LEDs stay lit while started). */
 void status_led_channel(uint8_t channel, bool enabled);
 
-/* Report one frame on a channel: rx == true for a received frame, false for a
- * transmitted one.  Safe to call before status_led_init(). */
+/* Report one frame on a channel (rx == true for a received frame). */
 void status_led_activity(uint8_t channel, bool rx);
 
-/* Non-blocking: plays the boot animation, ages the traffic dark windows, toggles
- * the plain-GPIO "running" LED (BOARD_HAS_SYS_LED) every SYS_LED_TOGGLE_MS and
- * pushes the frame to the strip (throttled to RENDER_MIN_INTERVAL_MS). */
+/* Non-blocking: ages the dark windows, toggles the GPIO LED, pushes the frame. */
 void status_led_tick(void);
 
-/* Start the boot animation: a rainbow comet that sweeps the strip ANIM_SWEEPS
- * times and leaves it dark for the normal channel indication.  Non-blocking -
- * it is paced by status_led_tick(), which has to be called from the main loop
- * for it to move.  Call after status_led_init(); a no-op on boards without a
- * strip. */
+/* Start the boot comet (non-blocking, paced by status_led_tick()); call after status_led_init(). */
 void status_led_boot_anim(void);
 
 #endif /* CANDLE_STATUS_LED_H */

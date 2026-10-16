@@ -1,21 +1,3 @@
-/*
- * usbd_bridge.c - CherryUSB <-> STM32 USB Device Library bridge.
- *
- * candleLight_fw's src/usbd_gs_can.c (frame linked-list engine) and src/main.c
- * are used verbatim; this file supplies the STM32 USBD entry points they call
- * (USBD_Init / USBD_RegisterClass / USBD_Start / USBD_LL_* / USBD_Ctl*) backed
- * by CherryUSB, plus the descriptors.
- *
- * Descriptor notes:
- *  - Interface 0 = gs_usb vendor class.  flash_dfu images additionally expose
- *    interface 1 = DFU runtime class (detach only); flash_uf2 images do not,
- *    because they are started by a UF2/MSC bootloader and there is no DFU
- *    endpoint to talk to.
- *  - Full-Speed uses 64-byte bulk endpoints, High-Speed 512-byte.
- *  - WCID / Microsoft OS 1.0 descriptors are registered through CherryUSB so
- *    Windows binds WinUSB without a driver.  The byte blobs below mirror the
- *    ones candleLight_fw/src/usbd_gs_can.c keeps private.
- */
 
 #include <string.h>
 
@@ -38,11 +20,7 @@
 /* ------------------------------------------------------------------ */
 /* Descriptors                                                        */
 /* ------------------------------------------------------------------ */
-/*
- * The DFU runtime interface only exists so that a host can ask the running
- * application to reboot into a DFU bootloader.  A flash_uf2 image is started by
- * a UF2/MSC bootloader instead, so it must not advertise one at all.
- */
+/* The DFU runtime interface exists for flash_dfu only. */
 #if defined(FLASH_UF2) && FLASH_UF2
 #define GSUSB_HAS_DFU_RUNTIME 0
 #else
@@ -83,17 +61,7 @@ static const uint8_t config_descriptor_hs[] = { GSUSB_CONFIG_BODY(0x02, 0x00, 0x
 static const uint8_t other_speed_descriptor_fs[] = { GSUSB_CONFIG_BODY(0x07, 0x00, 0x02) };
 static const uint8_t other_speed_descriptor_hs[] = { GSUSB_CONFIG_BODY(0x07, 0x40, 0x00) };
 
-/*
- * NOTE: bcdDevice is 0x0002.
- *
- * The serial number is derived from the fixed chip UID, so the device instance
- * id never changes.  Windows caches the WCID answers (osvc under
- * usbflags\<VID><PID><REV>, and the resolved DeviceInterfaceGUIDs under the
- * device instance) for that instance, so a firmware change to the extended
- * properties alone would not be picked up on the next plug-in.  Bumping the
- * revision gives Windows a new device signature and forces a fresh MS OS
- * descriptor query.
- */
+/* bcdDevice 0x0002: the serial is the fixed UID, so Windows caches WCID per instance - bump it. */
 static const uint8_t device_descriptor[] = {
     USB_DEVICE_DESCRIPTOR_INIT(USB_2_0, 0x00, 0x00, 0x00, USBD_VID, USBD_PID_FS, 0x0002, 0x01),
 };
@@ -109,33 +77,11 @@ static char g_serial_string[25];
 /* ------------------------------------------------------------------ */
 #define GSUSB_WINUSB_VENDOR_CODE USBD_GS_CAN_VENDOR_CODE
 
-/*
- * WCID extended properties -- one "DeviceInterfaceGUIDs" per function.
- *
- * On Windows this is not cosmetic.  winusb.sys registers a device interface
- * only for the GUIDs listed here, and libusb (hence dfu-util) finds devices
- * through those interfaces.  A function whose property set is empty still
- * shows up in Device Manager, but exposes no device interface, so opening it
- * fails with:
- *     Cannot claim interface 1: LIBUSB_ERROR_NOT_SUPPORTED
- * This is the same failure as libusb issue #422 (a runtime DFU interface on a
- * candleLight-like composite device).  The original candleLight only gives a
- * GUID to the gs_usb interface, which is why `dfu-util -e` misbehaves there.
- *
- *   function 0 -> interface 0 (gs_usb)  : candleLight's GUID, unchanged, so
- *                                         existing host tooling keeps working
- *   function 1 -> interface 1 (DFU rt.) : its own GUID -- required for
- *                                         dfu-util to reach the interface
- */
+/* WCID GUIDs, one per function: without one libusb/dfu-util cannot claim the interface. */
 #define GSUSB_INTERFACE_GUID       "{c15b4308-04d3-11e6-b3ea-6057189e6443}"
 #define DFU_RUNTIME_INTERFACE_GUID "{3f8b2c47-9d15-4a6e-b2c8-5e0f7a4d1b93}"
 
-/*
- * Extended properties feature descriptor size:
- *   10 header + 4 dwPropertySize + 4 dwPropertyDataType
- *   + 2 wPropertyNameLength + 42 L"DeviceInterfaceGUIDs"
- *   + 4 dwPropertyDataLength + 80 REG_MULTI_SZ payload
- */
+/* Feature descriptor size: 10 + 4 + 4 + 2 + 42 + 4 + 80 bytes. */
 #define MSOS_EXT_PROP_LEN (0x92U)
 
 _Static_assert(sizeof(DFU_RUNTIME_INTERFACE_GUID) == sizeof(GSUSB_INTERFACE_GUID),
@@ -217,10 +163,7 @@ static const uint8_t g_msos_ext_prop_empty[] = {
 static uint8_t g_msos_ext_prop_dfu[MSOS_EXT_PROP_LEN];
 #endif
 
-/*
- * CherryUSB indexes this with setup->wValue, i.e. the function index, so keep
- * one entry per function plus a trailing guard for out-of-range values.
- */
+/* Indexed with setup->wValue (the function index), plus a guard entry. */
 static const uint8_t *g_msos_ext_prop_list[] = {
     g_msos_ext_prop,
 #if GSUSB_HAS_DFU_RUNTIME
@@ -230,11 +173,7 @@ static const uint8_t *g_msos_ext_prop_list[] = {
 };
 
 #if GSUSB_HAS_DFU_RUNTIME
-/*
- * Emit a one-property extended properties descriptor holding the given
- * REG_MULTI_SZ DeviceInterfaceGUID.  Assembled from the plain ASCII string so
- * that the UTF-16LE conversion cannot be mistyped.
- */
+/* One-property descriptor built from the ASCII GUID (no hand-written UTF-16LE). */
 static void msos_ext_prop_build_one(uint8_t *dst, const char *guid)
 {
     static const char prop_name[] = "DeviceInterfaceGUIDs";
@@ -362,20 +301,14 @@ static const struct usb_descriptor gs_descriptor = {
 
 static USBD_HandleTypeDef *g_pdev;
 
-/* Control IN staging: candleLight passes stack pointers to USBD_CtlSendData(),
- * but CherryUSB fetches the payload only after we return - so take a copy. */
+/* Control IN staging: the payload may be a stack buffer, so take a copy. */
 static uint8_t g_ctl_in_shadow[USBD_DESC_BUF_SIZE];
 static uint16_t g_ctl_in_len;
 static uint8_t *g_ctl_out_dst;
 static uint16_t g_ctl_out_len;
 static volatile bool g_ctl_failed;
 
-/* The HPM USB controller transfers via qHD/qTD DMA descriptors, so every
- * buffer handed to it must stay valid until the transfer completes.
- * candleLight passes a stack buffer to USBD_LL_Transmit() in the
- * PAD_PKTS_TO_MAX_PKT_SIZE path, so bounce through a persistent buffer.
- * Sized for the largest gs_usb frame (CAN-FD + timestamp, 80 bytes); only one
- * IN transfer is ever in flight (guarded by hcan->to_host_buf). */
+/* qHD/qTD DMA needs the buffer until the transfer ends: bounce through this one (80 B). */
 #define GSUSB_TX_BOUNCE_SIZE GS_HOST_FRAME_SIZE
 static USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t g_tx_bounce[GSUSB_TX_BOUNCE_SIZE];
 
@@ -537,9 +470,7 @@ static int gs_bridge_setup(uint8_t busid, struct usb_setup_packet *setup, uint8_
     }
 
     if (out_with_data) {
-        /* CherryUSB only asks the handler once the OUT payload has arrived.
-         * The STM32 library splits this into the setup stage (which selects the
-         * destination buffer) and the EP0_RxReady stage (which interprets it). */
+        /* CherryUSB calls this once the OUT payload arrived (STM32: setup + EP0_RxReady). */
         if ((g_ctl_out_dst != NULL) && (*data != NULL)) {
             uint32_t n = MIN(*len, (uint32_t)g_ctl_out_len);
             memcpy(g_ctl_out_dst, *data, n);
@@ -685,9 +616,7 @@ USBD_StatusTypeDef USBD_RegisterClass(USBD_HandleTypeDef *pdev, USBD_ClassTypeDe
     hex32(g_serial_string + 16, w2);
 
 #if GSUSB_HAS_DFU_RUNTIME
-    /* Give the DFU runtime interface (function 1) its own DeviceInterfaceGUID,
-     * otherwise Windows exposes no device interface for it and dfu-util fails
-     * with "Cannot claim interface 1: LIBUSB_ERROR_NOT_SUPPORTED". */
+    /* Function 1 (DFU runtime) needs its own GUID or dfu-util cannot claim it. */
     msos_ext_prop_build_one(g_msos_ext_prop_dfu, DFU_RUNTIME_INTERFACE_GUID);
 #endif
 

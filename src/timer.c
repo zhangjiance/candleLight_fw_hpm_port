@@ -1,12 +1,3 @@
-/*
- * timer.c - candleLight_fw's timer.h contract on HPMicro.
- *
- *   timer_init()  : remember the CPU frequency and the epoch
- *   timer_get()   : free running microsecond counter (32 bit, wraps ~71 min)
- *
- * Implemented on the RISC-V cycle counter (mcycle) so that no peripheral
- * timer is consumed and the value is safe to read from an interrupt.
- */
 
 #include <stdint.h>
 

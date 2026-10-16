@@ -1,7 +1,3 @@
-/*
- * usbd_bridge.h - bridge between candleLight_fw's STM32 USBD usage and
- * CherryUSB on HPMicro.
- */
 
 #pragma once
 

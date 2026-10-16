@@ -1,11 +1,3 @@
-/*
- * port_device.c - platform bring-up for candleLight_fw on HPMicro HPM5321/HPM5361.
- *
- * candleLight's main.c calls HAL_Init() and device_sysclock_config(); here
- * HAL_Init() performs the SoC/board bring-up (clock tree, pin mux, USB PHY)
- * and device_sysclock_config() is a no-op because board_init() already applies
- * the SoC clock tree.
- */
 
 #include <stdint.h>
 
@@ -26,19 +18,7 @@
 #endif
 #include "wdt_hpm.h"
 
-/*
- * Device unique ID used for the USB iSerialNumber.
- *
- * This has to be unique per board.  Windows builds the device instance id as
- * USB\VID_xxxx&PID_xxxx\<serial> and will not enumerate a second device whose
- * serial collides, so a constant value breaks as soon as two boards are
- * plugged in at once (and makes `dfu-util -S <serial>` useless).
- *
- * Loaded from the top 96 bits of the chip UUID in the OTP shadow
- * (OTP_SOC_UUID_IDX = 88, 4 words) through the boot ROM API -- the same way the
- * SDK's TinyUSB BSP does it in board_get_unique_id().  The bootloader reads
- * words 88..90 too, so one board reports the same serial in both modes.
- */
+/* USB iSerialNumber from the chip UUID (OTP shadow, 12 bytes); must be unique per board. */
 uint8_t hpm_uid[12];
 
 #define OTP_UUID_WORD_IDX (88U) /* hpm_soc_feature.h: OTP_SOC_UUID_IDX */
@@ -63,29 +43,21 @@ void HAL_Init(void)
     board_init();
 
 #if defined(FLASH_UF2) && FLASH_UF2
-    /* The stock UF2 bootloader counts bounced boots in bl_setting; a healthy
-     * application boot clears that counter (and publishes its version). */
+    /* Clear the UF2 bootloader's bounced-boot counter and publish the version. */
     bl_setting_app_init();
 #endif
 
-    /* The stock bootloader may leave EWDG0 armed with reset-on-timeout; make
-     * sure the clock is on and start feeding it before anything blocks. */
+    /* The bootloader may leave EWDG0 armed: clock it on and feed it before anything blocks. */
     wdt_hpm_init();
 
     /* Chip UUID -> USB iSerialNumber (must be unique per board). */
     hpm_uid_load();
 
-    /* USB device controller + on-chip PHY (board package selects the pins,
-     * the clock and the vbus source) */
+    /* USB device controller + on-chip PHY (pins/clock/vbus from the board package). */
     board_init_usb(BOARD_USB_BASE);
     intc_set_irq_priority(BOARD_USB_IRQn, 2U);
 
-    /*
-     * The HPM USB controller moves payloads with descriptor DMA (qHD/qTD), so
-     * every buffer handed to it has to stay coherent.  candleLight_fw hands its
-     * frame pool over directly, therefore keep the D-cache off.  The I-cache is
-     * DMA-irrelevant and stays enabled.
-     */
+    /* USB moves payloads by DMA and the frame pool is handed over: keep the D-cache off. */
     l1c_dc_disable();
     l1c_ic_enable();
 }

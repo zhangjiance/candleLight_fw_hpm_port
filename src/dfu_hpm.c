@@ -1,20 +1,3 @@
-/*
- * dfu_hpm.c - candleLight_fw's dfu.h contract on HPMicro.
- *
- * "dfu_run_bootloader()" means "re-enter the second stage bootloader".  Which
- * bootloader is in front of the application depends on HPM_BUILD_TYPE:
- *
- *  - flash_dfu  -> hpm_dfu_boot (DFU/DfuSe).  A magic value is stored in a
- *                  retention register and the ROM run_bootloader API re-enters
- *                  the boot at 0x80000000; hpm_dfu_boot sees the magic and stays
- *                  in DFU mode.
- *
- *  - flash_uf2  -> the stock UF2/MSC bootloader (a CherryDAP "bootuf2"
- *                  derivative).  There is no retention-register hand-shake;
- *                  instead keep_bootloader is set in the shared bl_setting block
- *                  and the ROM boot flow is re-entered, which re-runs the
- *                  bootloader at 0x80000000 (which then exposes its UF2 volume).
- */
 
 #include <stdint.h>
 
@@ -41,8 +24,7 @@
 
 void dfu_run_bootloader(void)
 {
-    /* Ask the bootloader for UF2 mode.  bl_setting lives in AHB_SRAM, which
-     * survives the ROM boot flow re-entry below. */
+    /* Ask for UF2 mode; bl_setting is in AHB_SRAM, which survives the re-entry below. */
     bl_setting_request_bootloader();
 
     disable_global_irq(CSR_MSTATUS_MIE_MASK);
@@ -51,11 +33,7 @@ void dfu_run_bootloader(void)
     l1c_dc_disable();
     fencei();
 
-    /* Re-enter the ROM boot flow (primary image -> bootloader @0x80000000).
-     * NOTE: a plain PPOR software reset does NOT preserve bl_setting for the
-     * bootloader, so the bootloader would see keep_bootloader == 0 and jump
-     * straight back into the application.  This mirrors CherryDAP's
-     * HSP_EnterHSLinkBootloader(). */
+    /* Re-enter the ROM boot flow; a plain soft reset would not preserve bl_setting. */
     api_boot_arg_t boot_arg = {
         .index = 0,
         .peripheral = API_BOOT_PERIPH_AUTO,

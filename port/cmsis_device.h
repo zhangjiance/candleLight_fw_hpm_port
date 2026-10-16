@@ -1,12 +1,3 @@
-/*
- * cmsis_device.h - RISC-V (HPMicro) replacement for candleLight_fw's CMSIS dependency.
- *
- * candleLight_fw's util.h only needs a handful of Cortex-M intrinsics:
- *   __get_PRIMASK() / __disable_irq() / __enable_irq() / __ISB()
- * This header implements them on top of the RISC-V mstatus.MIE bit so that
- * candleLight's util.h (and therefore can_common.c / usbd_gs_can.c) can be
- * compiled unmodified.
- */
 
 #pragma once
 

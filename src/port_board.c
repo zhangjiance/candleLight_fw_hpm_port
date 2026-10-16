@@ -1,19 +1,3 @@
-/*
- * port_board.c - glue between candleLight_fw's board abstraction
- * (port/board_layout.h) and the selected board package (boards/<BOARD>/).
- *
- * This file contains no board specific constants.  Everything comes from the
- * board package through the contract documented in port/board_contract.h:
- *
- *   BOARD_CAN_INSTANCES / BOARD_CAN_COUNT
- *       the MCAN instances wired on the board
- *   BOARD_HAS_SYS_LED
- *       whether board_led_toggle() drives a real "running" LED
- *   board_init(), board_init_usb(), board_delay_ms(), init_can_pins()
- *       clock tree, pad muxing, USB PHY
- *   board_init_can_clock()
- *       board owned CAN clock source/divider
- */
 
 #include "board_layout.h" /* candleLight's board abstraction, to be filled in */
 #include "can.h"
@@ -97,11 +81,7 @@ enum gs_can_termination_state get_term(can_data_t *channel)
 }
 #endif
 
-/*
- * Long-press the user button (~500 ms) to request the bootloader.  Called
- * from the candleLight main loop through config.mainloop_callback; the hold
- * time is measured with timer_get() so the CAN/USB loop is never blocked.
- */
+/* Long-press the user button (~500 ms) to request the bootloader. */
 #ifdef BOARD_APP_GPIO_CTRL
 static void board_mainloop_callback(void)
 {
@@ -124,9 +104,7 @@ static void board_mainloop_callback(void)
 
 struct BoardConfig config = {
     .setup = board_setup,
-    /* The CAN transceivers are left in the state the board package put them in
-     * at boot.  Wire these up (and the termination GPIO) if a board provides
-     * switchable power / termination. */
+    /* Transceivers stay as the board package left them. */
     .phy_power_set = NULL,
 #ifdef TERM_Pin
     .termination_set = board_termination_set,
@@ -138,9 +116,7 @@ struct BoardConfig config = {
 #else
     .mainloop_callback = NULL,
 #endif
-    /* channels[] is deliberately left zero initialized and filled in by
-     * board_setup(), so this file stays correct for any NUM_CAN_CHANNEL.
-     * (leds[].port == NULL means "no RX/TX LED wired yet".) */
+    /* channels[] is filled by board_setup() at runtime. */
 };
 
 static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
@@ -156,8 +132,7 @@ static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
     for (unsigned int i = 0U; i < count; i++) {
         MCAN_Type *instance = s_can_instances[i];
 
-        /* Publish the instance so main.c's can_init() sees it, then make sure
-         * the pads are muxed and the CAN clock is running. */
+        /* Publish the instance for can_init(), then mux the pads and start the CAN clock. */
         config.channels[i].interface = instance;
         init_can_pins(instance);
         (void)board_init_can_clock(instance);

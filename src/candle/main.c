@@ -28,12 +28,6 @@ THE SOFTWARE.
 #include <stdint.h>
 #include <stdlib.h>
 
-/*
- * PORT SEAM (HPMicro): candleLight's board.h lives in the port layer as
- * board_layout.h, because "board.h" now means the board package
- * (boards/<BOARD>/board.h), whose original counterpart in
- * candleLight_fw/include is excluded from the include path.
- */
 #include "board_layout.h"
 #include "can.h"
 #include "can_common.h"
@@ -46,17 +40,12 @@ THE SOFTWARE.
 #include "led.h"
 #include "timer.h"
 #include "usbd_conf.h"
-/*
- * PORT SEAM (HPMicro): usbd_core.h / usbd_def.h are replaced by our
- * CherryUSB-backed compatibility layer.  Everything else in this file is an
- * unmodified copy of candleLight_fw/src/main.c.
- */
+
 #include "usbd_compat.h"
 #include "usbd_desc.h"
 #include "usbd_gs_can.h"
 #include "util.h"
 
-/* HPMicro: status LEDs on the board's WS2812 chain (src/status_led.c). */
 #include "status_led.h"
 
 static USBD_GS_CAN_HandleTypeDef hGS_CAN;
@@ -65,14 +54,14 @@ static USBD_HandleTypeDef hUSB = {0};
 static void DisableUSBSOFInterrupt(USBD_HandleTypeDef *pdev)
 {
 #if defined(USB) || defined(USB_DRD_FS)
-	// F0, G0 and G4 do not respect sof_enable field in their init structures
+
 	PCD_HandleTypeDef *pcd = (PCD_HandleTypeDef*)pdev->pData;
 
 #if defined(USB_DRD_FS)
-	// G0
+
 	USB_DRD_TypeDef *usb = pcd->Instance;
 #else
-	// F0 and G4
+
 	USB_TypeDef *usb = pcd->Instance;
 #endif
 
@@ -90,24 +79,8 @@ int main(void)
 	config.setup(&hGS_CAN);
 	timer_init();
 
-	/*
-	 * Status LEDs on the board's WS2812 chain (src/status_led.c).  Called
-	 * unconditionally: on boards without a strip this is a no-op.
-	 *
-	 * Do NOT wrap this in "#if BOARD_HAS_WS2812": this file does not include
-	 * the board package header (boards/<BOARD>/board.h), so the macro is not
-	 * defined here and the guard silently removed the whole LED bring-up -
-	 * the strip then stayed dark for channel state and traffic alike.  The
-	 * board knowledge lives in ws2812.c instead.
-	 */
 	status_led_init();
 
-	/*
-	 * PORT SEAM (HPMicro): boot animation - the rainbow comet that
-	 * feat/hscant-mode-ws2812 plays on a button single-click, played here
-	 * right at start-up.  Non-blocking: it is paced by status_led_tick()
-	 * below, so CAN/USB bring-up is not delayed by it.
-	 */
 	status_led_boot_anim();
 
 	INIT_LIST_HEAD(&hGS_CAN.list_frame_pool);
@@ -130,17 +103,7 @@ int main(void)
 				 led_config[LED_RX].port, led_config[LED_RX].pin, led_config[LED_RX].active_high, led_config[LED_RX].invert,
 				 led_config[LED_TX].port, led_config[LED_TX].pin, led_config[LED_TX].active_high, led_config[LED_TX].invert);
 
-		/*
-		 * PORT SEAM (HPMicro): the "nice wake-up pattern" is only worth
-		 * anything on a board that really wires RX/TX LEDs to GPIOs.
-		 * config.channels[] comes from src/port_board.c, which leaves
-		 * leds[].port at NULL on the HPMicro boards (their indication is
-		 * the WS2812 chain, + a "running" LED), and HAL_GPIO_TogglePin()
-		 * is a no-op then - the loop would just burn 10 x 50 ms per
-		 * channel.  With 4 channels that is 2 s of a dark strip at every
-		 * boot, before the main loop - and with it the boot animation -
-		 * can start.
-		 */
+
 		if (led_config[LED_RX].port != NULL) {
 			for (uint8_t j = 0; j < 10; j++) {
 				HAL_GPIO_TogglePin(led_config[LED_RX].port, led_config[LED_RX].pin);
@@ -174,8 +137,7 @@ int main(void)
 			led_update(&channel->leds);
 		}
 
-		/* Ages the per-channel traffic windows and repaints the WS2812
-		 * chain (throttled).  Also blinks the plain-GPIO "running" LED. */
+
 		status_led_tick();
 
 		if (USBD_GS_CAN_DfuDetachRequested(&hUSB)) {

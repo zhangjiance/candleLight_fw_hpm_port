@@ -36,144 +36,118 @@ THE SOFTWARE.
 #include "hal_include.h"
 #include "led.h"
 #include "timer.h"
-/*
- * PORT SEAM (HPMicro): the STM32 USB Device Library headers
- *   usbd_core.h / usbd_ctlreq.h / usbd_def.h / usbd_desc.h / usbd_ioreq.h
- * are replaced by our CherryUSB-backed compatibility layer.  Everything else
- * in this file is an unmodified copy of candleLight_fw/src/usbd_gs_can.c.
- */
+
 #include "usbd_compat.h"
 #include "usbd_gs_can.h"
 #include "util.h"
 
 static volatile bool is_usb_suspend_cb = false;
 
-/* Configuration Descriptor */
 static const uint8_t USBD_GS_CAN_CfgDesc[USB_CAN_CONFIG_DESC_SIZ] =
 {
-	/*---------------------------------------------------------------------------*/
-	/* Configuration Descriptor */
-	0x09,                             /* bLength */
-	USB_DESC_TYPE_CONFIGURATION,      /* bDescriptorType */
-	USB_CAN_CONFIG_DESC_SIZ,          /* wTotalLength */
+
+	0x09,
+	USB_DESC_TYPE_CONFIGURATION,
+	USB_CAN_CONFIG_DESC_SIZ,
 	0x00,
-	0x02,                             /* bNumInterfaces */
-	0x01,                             /* bConfigurationValue */
-	USBD_IDX_CONFIG_STR,              /* iConfiguration */
-	0x80,                             /* bmAttributes */
-	0x4B,                             /* MaxPower 150 mA */
-	/*---------------------------------------------------------------------------*/
+	0x02,
+	0x01,
+	USBD_IDX_CONFIG_STR,
+	0x80,
+	0x4B,
 
-	/*---------------------------------------------------------------------------*/
-	/* GS_USB Interface Descriptor */
-	0x09,                             /* bLength */
-	USB_DESC_TYPE_INTERFACE,          /* bDescriptorType */
-	0x00,                             /* bInterfaceNumber */
-	0x00,                             /* bAlternateSetting */
-	0x02,                             /* bNumEndpoints */
-	0xFF,                             /* bInterfaceClass: Vendor Specific*/
-	0xFF,                             /* bInterfaceSubClass: Vendor Specific */
-	0xFF,                             /* bInterfaceProtocol: Vendor Specific */
-	0x00,                             /* iInterface */
-	/*---------------------------------------------------------------------------*/
+	0x09,
+	USB_DESC_TYPE_INTERFACE,
+	0x00,
+	0x00,
+	0x02,
+	0xFF,
+	0xFF,
+	0xFF,
+	0x00,
 
-	/*---------------------------------------------------------------------------*/
-	/* EP1 descriptor */
-	0x07,                             /* bLength */
-	USB_DESC_TYPE_ENDPOINT,           /* bDescriptorType */
-	GSUSB_ENDPOINT_IN,                /* bEndpointAddress */
-	0x02,                             /* bmAttributes: bulk */
-	LOBYTE(CAN_DATA_MAX_PACKET_SIZE), /* wMaxPacketSize */
+	0x07,
+	USB_DESC_TYPE_ENDPOINT,
+	GSUSB_ENDPOINT_IN,
+	0x02,
+	LOBYTE(CAN_DATA_MAX_PACKET_SIZE),
 	HIBYTE(CAN_DATA_MAX_PACKET_SIZE),
-	0x00,                             /* bInterval: */
-	/*---------------------------------------------------------------------------*/
+	0x00,
 
-	/*---------------------------------------------------------------------------*/
-	/* EP2 descriptor */
-	0x07,                             /* bLength */
-	USB_DESC_TYPE_ENDPOINT,           /* bDescriptorType */
-	GSUSB_ENDPOINT_OUT,               /* bEndpointAddress */
-	0x02,                             /* bmAttributes: bulk */
-	LOBYTE(CAN_DATA_MAX_PACKET_SIZE), /* wMaxPacketSize */
+	0x07,
+	USB_DESC_TYPE_ENDPOINT,
+	GSUSB_ENDPOINT_OUT,
+	0x02,
+	LOBYTE(CAN_DATA_MAX_PACKET_SIZE),
 	HIBYTE(CAN_DATA_MAX_PACKET_SIZE),
-	0x00,                             /* bInterval: */
-	/*---------------------------------------------------------------------------*/
+	0x00,
 
-	/*---------------------------------------------------------------------------*/
-	/* DFU Interface Descriptor */
-	/*---------------------------------------------------------------------------*/
-	0x09,                             /* bLength */
-	USB_DESC_TYPE_INTERFACE,          /* bDescriptorType */
-	DFU_INTERFACE_NUM,                /* bInterfaceNumber */
-	0x00,                             /* bAlternateSetting */
-	0x00,                             /* bNumEndpoints */
-	0xFE,                             /* bInterfaceClass: Vendor Specific*/
-	0x01,                             /* bInterfaceSubClass */
-	0x01,                             /* bInterfaceProtocol : Runtime mode */
-	DFU_INTERFACE_STR_INDEX,          /* iInterface */
+	0x09,
+	USB_DESC_TYPE_INTERFACE,
+	DFU_INTERFACE_NUM,
+	0x00,
+	0x00,
+	0xFE,
+	0x01,
+	0x01,
+	DFU_INTERFACE_STR_INDEX,
 
-	/*---------------------------------------------------------------------------*/
-	/* Run-Time DFU Functional Descriptor */
-	/*---------------------------------------------------------------------------*/
-	0x09,                             /* bLength */
-	0x21,                             /* bDescriptorType: DFU FUNCTIONAL */
-	0x0B,                             /* bmAttributes: detach, upload, download */
-	0xFF, 0x00,                       /* wDetachTimeOut */
-	0x00, 0x08,                       /* wTransferSize */
-	0x1a, 0x01,                       /* bcdDFUVersion: 1.1a */
+	0x09,
+	0x21,
+	0x0B,
+	0xFF, 0x00,
+	0x00, 0x08,
+	0x1a, 0x01,
 
 };
 
-/* Microsoft OS String Descriptor */
 static const uint8_t USBD_GS_CAN_WINUSB_STR[] =
 {
-	0x12,                    /* length */
-	0x03,                    /* descriptor type == string */
-	0x4D, 0x00, 0x53, 0x00,  /* signature: "MSFT100" */
+	0x12,
+	0x03,
+	0x4D, 0x00, 0x53, 0x00,
 	0x46, 0x00, 0x54, 0x00,
 	0x31, 0x00, 0x30, 0x00,
 	0x30, 0x00,
-	USBD_GS_CAN_VENDOR_CODE, /* vendor code */
-	0x00                     /* padding */
+	USBD_GS_CAN_VENDOR_CODE,
+	0x00
 };
 
-/*  Microsoft Compatible ID Feature Descriptor  */
 static const uint8_t USBD_MS_COMP_ID_FEATURE_DESC[] = {
-	0x40, 0x00, 0x00, 0x00, /* length */
-	0x00, 0x01,             /* version 1.0 */
-	0x04, 0x00,             /* descr index (0x0004) */
-	0x02,                   /* number of sections */
-	0x00, 0x00, 0x00, 0x00, /* reserved */
+	0x40, 0x00, 0x00, 0x00,
+	0x00, 0x01,
+	0x04, 0x00,
+	0x02,
+	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00,
-	0x00,                   /* interface number */
-	0x01,                   /* reserved */
-	0x57, 0x49, 0x4E, 0x55, /* compatible ID ("WINUSB\0\0") */
+	0x00,
+	0x01,
+	0x57, 0x49, 0x4E, 0x55,
 	0x53, 0x42, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, /* sub-compatible ID */
 	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, /* reserved */
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00,
-	0x01,                   /* interface number */
-	0x01,                   /* reserved */
-	0x57, 0x49, 0x4E, 0x55, /* compatible ID ("WINUSB\0\0") */
+	0x01,
+	0x01,
+	0x57, 0x49, 0x4E, 0x55,
 	0x53, 0x42, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, /* sub-compatible ID */
 	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, /* reserved */
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00
 };
 
-/* Microsoft Extended Properties Feature Descriptor */
 static const uint8_t USBD_MS_EXT_PROP_FEATURE_DESC[] = {
-	0x92, 0x00, 0x00, 0x00, /* length */
-	0x00, 0x01,             /* version 1.0 */
-	0x05, 0x00,             /* descr index (0x0005) */
-	0x01, 0x00,             /* number of sections */
-	0x88, 0x00, 0x00, 0x00, /* property section size */
-	0x07, 0x00, 0x00, 0x00, /* property data type 7: Unicode REG_MULTI_SZ */
-	0x2a, 0x00,             /* property name length */
+	0x92, 0x00, 0x00, 0x00,
+	0x00, 0x01,
+	0x05, 0x00,
+	0x01, 0x00,
+	0x88, 0x00, 0x00, 0x00,
+	0x07, 0x00, 0x00, 0x00,
+	0x2a, 0x00,
 
-	0x44, 0x00, 0x65, 0x00, /* property name "DeviceInterfaceGUIDs" */
+	0x44, 0x00, 0x65, 0x00,
 	0x76, 0x00, 0x69, 0x00,
 	0x63, 0x00, 0x65, 0x00,
 	0x49, 0x00, 0x6e, 0x00,
@@ -185,9 +159,9 @@ static const uint8_t USBD_MS_EXT_PROP_FEATURE_DESC[] = {
 	0x44, 0x00, 0x73, 0x00,
 	0x00, 0x00,
 
-	0x50, 0x00, 0x00, 0x00, /* property data length */
+	0x50, 0x00, 0x00, 0x00,
 
-	0x7b, 0x00, 0x63, 0x00, /* property name: "{c15b4308-04d3-11e6-b3ea-6057189e6443}\0\0" */
+	0x7b, 0x00, 0x63, 0x00,
 	0x31, 0x00, 0x35, 0x00,
 	0x62, 0x00, 0x34, 0x00,
 	0x33, 0x00, 0x30, 0x00,
@@ -209,21 +183,11 @@ static const uint8_t USBD_MS_EXT_PROP_FEATURE_DESC[] = {
 	0x00, 0x00, 0x00, 0x00
 };
 
-// device info
 static const struct gs_device_config USBD_GS_CAN_dconf = {
 	.icount = NUM_CAN_CHANNEL - 1,
 	.sw_version = 2,
 	.hw_version = 1,
 };
-
-/* It's unclear from the documentation, but it appears that the USB library is
- * not safely reentrant. It attempts to signal errors via return values if it is
- * reentered, but that code is not interrupt-safe and the error values are
- * silently ignored within the library in several cases. We'll just disable
- * interrupts at all entry points to be safe. Note that the callbacks are all
- * called from within the libary itself, either within the interrupt handler or
- * within other calls, which means the USB interrupt is already disabled and we
- * don't have any other interrupts to worry about. */
 
 static uint8_t USBD_GS_CAN_Start(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
@@ -252,17 +216,17 @@ static uint8_t USBD_GS_CAN_DFU_Request(USBD_HandleTypeDef *pdev, USBD_SetupReqTy
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*) pdev->pClassData;
 	switch (req->bRequest) {
 
-		case 0: // DETACH request
+		case 0:
 			hcan->dfu_detach_requested = true;
 			break;
 
-		case 3: // GET_STATUS request
-			hcan->ep0_buf[0] = 0x00; // bStatus: 0x00 == OK
-			hcan->ep0_buf[1] = 0x00; // bwPollTimeout
+		case 3:
+			hcan->ep0_buf[0] = 0x00;
+			hcan->ep0_buf[1] = 0x00;
 			hcan->ep0_buf[2] = 0x00;
 			hcan->ep0_buf[3] = 0x00;
-			hcan->ep0_buf[4] = 0x00; // bState: appIDLE
-			hcan->ep0_buf[5] = 0xFF; // status string descriptor index
+			hcan->ep0_buf[4] = 0x00;
+			hcan->ep0_buf[5] = 0xFF;
 			USBD_CtlSendData(pdev, hcan->ep0_buf, 6);
 			break;
 
@@ -292,16 +256,6 @@ static uint8_t USBD_GS_CAN_Config_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 	const void *src = NULL;
 	size_t len;
 
-	/*
-	 * For all "per device" USB control messages
-	 * (GS_USB_BREQ_HOST_FORMAT and GS_USB_BREQ_DEVICE_CONFIG) the
-	 * Linux gs_usb driver uses a req->wValue = 1.
-	 *
-	 * All other control messages are "per channel" and specify the
-	 * channel number in req->wValue. So check req->wValue for valid
-	 * CAN channel.
-	 *
-	 */
 	if (!(req->bRequest == GS_USB_BREQ_HOST_FORMAT ||
 		  req->bRequest == GS_USB_BREQ_DEVICE_CONFIG)) {
 		channel = USBD_GS_CAN_GetChannel(hcan, req->wValue);
@@ -319,7 +273,7 @@ static uint8_t USBD_GS_CAN_Config_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 	}
 
 	switch (req->bRequest) {
-		// Host -> Device
+
 		case GS_USB_BREQ_HOST_FORMAT:
 			len = sizeof(struct gs_host_config);
 			break;
@@ -395,7 +349,7 @@ static uint8_t USBD_GS_CAN_Config_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 			USBD_CtlPrepareRx(pdev, hcan->ep0_buf, req->wLength);
 			break;
 
-		// Device -> Host
+
 		case GS_USB_BREQ_BT_CONST:
 		case GS_USB_BREQ_DEVICE_CONFIG:
 		case GS_USB_BREQ_TIMESTAMP:
@@ -420,8 +374,8 @@ static uint8_t USBD_GS_CAN_Vendor_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 	uint8_t req_type = (req->bmRequest >> 5) & 0x03;
 
 	if (
-		(req_type == 0x01) // class request
-	   && (req_rcpt == 0x01) // recipient: interface
+		(req_type == 0x01)
+	   && (req_rcpt == 0x01)
 	   && (req->wIndex == DFU_INTERFACE_NUM)
 		) {
 		return USBD_GS_CAN_DFU_Request(pdev, req);
@@ -471,27 +425,13 @@ static uint8_t USBD_GS_CAN_EP0_RxReady(USBD_HandleTypeDef *pdev) {
 	USBD_SetupReqTypedef *req = &hcan->last_setup_request;
 	uint8_t err;
 
-	/*
-	 * The control messages GS_USB_BREQ_HOST_FORMAT and
-	 * GS_USB_BREQ_DEVICE_CONFIG are per device, all others are per
-	 * channel. The validity of req->wValue has been checked in
-	 * USBD_GS_CAN_Config_Request() already.
-	 */
 	if (!(req->bRequest == GS_USB_BREQ_HOST_FORMAT ||
 		  req->bRequest == GS_USB_BREQ_DEVICE_CONFIG))
 		channel = USBD_GS_CAN_GetChannel(hcan, req->wValue);
 
 	switch (req->bRequest) {
 		case GS_USB_BREQ_HOST_FORMAT:
-			/* The firmware on the original USB2CAN by Geschwister Schneider
-			 * Technologie Entwicklungs- und Vertriebs UG exchanges all data
-			 * between the host and the device in host byte order. This is done
-			 * with the struct gs_host_config::byte_order member, which is sent
-			 * first to indicate the desired byte order.
-			 *
-			 * The widely used open source firmware candleLight doesn't support
-			 * this feature and exchanges the data in little endian byte order.
-			 */
+
 			break;
 
 		case GS_USB_BREQ_BITTIMING: {
@@ -589,7 +529,7 @@ static uint8_t USBD_GS_CAN_PrepareTransmit(USBD_HandleTypeDef *pdev, struct gs_h
 	size_t len;
 
 	if (is_usb_suspend_cb) {
-		// USB is suspended, transmit not possible
+
 		return USBD_BUSY;
 	}
 
@@ -610,21 +550,11 @@ static uint8_t USBD_GS_CAN_PrepareTransmit(USBD_HandleTypeDef *pdev, struct gs_h
 
 	send_addr = (uint8_t *)frame;
 
-	/*
-	 * When talking to WinUSB it seems to help a lot if the size of
-	 * packet you send equals the max packet size. In this mode, fill
-	 * packets out to max packet size and then send.
-	 *
-	 * Don't know if the above observation is still true for CAN-FD
-	 * (CAN-FD frames don't fit into a single the full speed USB
-	 * packet of 64 byte), so don't do any padding for CAN-FD frames
-	 * for now.
-	 */
 	if (hcan->pad_pkts_to_max_pkt_size &&
 		!((IS_ENABLED(CONFIG_CANFD) && frame->flags & GS_CAN_FLAG_FD))) {
 		memcpy(buf, frame, len);
 
-		// zero rest of buffer
+
 		memset(buf + len, 0, sizeof(buf) - len);
 		send_addr = buf;
 		len = sizeof(buf);
@@ -633,50 +563,48 @@ static uint8_t USBD_GS_CAN_PrepareTransmit(USBD_HandleTypeDef *pdev, struct gs_h
 	return USBD_LL_Transmit(pdev, GSUSB_ENDPOINT_IN, send_addr, len);
 }
 
-// Should be called with interrupts disabled
 static void StartNextReceive(USBD_HandleTypeDef *pdev)
 {
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*)pdev->pClassData;
 
 	if (!hcan->from_host_buf) {
-		// Grab a buffer for the next frame from the pool.
+
 		hcan->from_host_buf = list_first_entry_or_null(&hcan->list_frame_pool,
 													   struct gs_host_frame_object,
 													   list);
 		if (hcan->from_host_buf) {
-			// Remove buffer from queue
+
 			list_del(&hcan->from_host_buf->list);
 
-			// Get ready to receive from the USB host into it.
+
 			USBD_GS_CAN_PrepareReceive(pdev);
 		} else {
-			// gs_can has no way to drop packets. If we just drop this one, gs_can
-			// will fill up its queue of packets awaiting ACKs and then hang. Instead,
-			// wait to call PrepareReceive until we have a frame to receive into.
+
+
+
 		}
 	}
 }
 
-// Should be called with interrupts disabled
 static void StartNextTransmit(USBD_HandleTypeDef *pdev)
 {
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*)pdev->pClassData;
 
 	if (!hcan->to_host_buf) {
-		// Grab a next message due to be transmitted
+
 		hcan->to_host_buf = list_first_entry_or_null(&hcan->list_to_host,
 													 struct gs_host_frame_object,
 													 list);
 		if (hcan->to_host_buf) {
-			// Attempt transmission
+
 			uint8_t result = USBD_GS_CAN_PrepareTransmit(pdev, &hcan->to_host_buf->frame);
 
 			if (result == USBD_OK) {
-				// Transmission accepted, remove frame from queue
+
 				list_del(&hcan->to_host_buf->list);
 
 			} else {
-				// Reset buffer
+
 				hcan->to_host_buf = NULL;
 			}
 		}
@@ -687,14 +615,11 @@ static uint8_t USBD_GS_CAN_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum) {
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*)pdev->pClassData;
 	(void) epnum;
 
-	// Device to host transmission has completed
 	bool was_irq_enabled = disable_irq();
 
-	// Return frame to free pool
 	list_add_tail(&hcan->to_host_buf->list, &hcan->list_frame_pool);
 	hcan->to_host_buf = NULL;
 
-	// Attempt to start next transmission
 	StartNextTransmit(pdev);
 
 	restore_irq(was_irq_enabled);
@@ -702,38 +627,35 @@ static uint8_t USBD_GS_CAN_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum) {
 	return USBD_OK;
 }
 
-// Note that the return value is completely ignored by the stack.
 static uint8_t USBD_GS_CAN_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum) {
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*)pdev->pClassData;
 	can_data_t *channel;
 
 	uint32_t rxlen = USBD_LL_GetRxDataSize(pdev, epnum);
 	if (rxlen < (struct_size(&hcan->from_host_buf->frame, classic_can, 1))) {
-		// Invalid frame length, just ignore it and receive into the same buffer
-		// again next time.
+
+
 		goto out_prepare_receive;
 	}
 
 	channel = USBD_GS_CAN_GetChannel(hcan, hcan->from_host_buf->frame.channel);
 	if (!channel) {
-		// Unknown channel, ignore and receive into same buffer again
+
 		goto out_prepare_receive;
 	}
 
 	if (IS_ENABLED(CONFIG_CANFD) &&
 		hcan->from_host_buf->frame.flags & GS_CAN_FLAG_FD &&
 		rxlen < struct_size(&hcan->from_host_buf->frame, canfd, 1)) {
-		// Invalid FD frame length, ignore and receive into same buffer again
+
 		goto out_prepare_receive;
 	}
 
 	bool was_irq_enabled = disable_irq();
 
-	// Enqueue the frame we just received with appropriate channel
 	list_add_tail(&hcan->from_host_buf->list, &channel->list_from_host);
 	hcan->from_host_buf = NULL;
 
-	// Start next receive
 	StartNextReceive(pdev);
 
 	restore_irq(was_irq_enabled);
@@ -741,17 +663,14 @@ static uint8_t USBD_GS_CAN_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum) {
 	return USBD_OK;
 
 out_prepare_receive:
-	// Start next receive, reusing existing buffer
+
 	USBD_GS_CAN_PrepareReceive(pdev);
 	return USBD_OK;
 }
 
 static uint8_t *USBD_GS_CAN_GetCfgDesc(uint16_t *len)
 {
-	/*
-	 * The USB stack writes to the returned buffer, so it cannot live
-	 * in ROM.
-	 */
+
 	*len = sizeof(USBD_GS_CAN_CfgDesc);
 	memcpy(USBD_DescBuf, USBD_GS_CAN_CfgDesc, sizeof(USBD_GS_CAN_CfgDesc));
 
@@ -777,7 +696,6 @@ uint8_t *USBD_GS_CAN_GetStrDesc(USBD_HandleTypeDef *pdev, uint8_t index, uint16_
 	}
 }
 
-/* CAN interface class callbacks structure */
 USBD_ClassTypeDef USBD_GS_CAN = {
 	.Init = USBD_GS_CAN_Start,
 	.DeInit = USBD_GS_CAN_DeInit,
@@ -811,7 +729,7 @@ bool USBD_GS_CAN_CustomDeviceRequest(USBD_HandleTypeDef *pdev, USBD_SetupReqType
 				return true;
 
 			case 0x0005:
-				if (req->wValue==0) { // only return our GUID for interface #0
+				if (req->wValue==0) {
 					memcpy(USBD_DescBuf, USBD_MS_EXT_PROP_FEATURE_DESC, sizeof(USBD_MS_EXT_PROP_FEATURE_DESC));
 					USBD_CtlSendData(pdev, USBD_DescBuf, MIN(sizeof(USBD_MS_EXT_PROP_FEATURE_DESC), req->wLength));
 					return true;
@@ -839,9 +757,9 @@ void USBD_GS_CAN_SendReceiveFromHost(USBD_HandleTypeDef *pdev)
 	   		)
 		 && (pdev->dev_state == USBD_STATE_CONFIGURED)
 	   ) {
-		// Either nothing being transmitted and frames queued for transmit
-		// Or nothing being received and frames queued for receive
-		// But the device is fully configured
+
+
+
 		bool was_irq_enabled = disable_irq();
 		StartNextTransmit(pdev);
 		StartNextReceive(pdev);
@@ -855,10 +773,9 @@ bool USBD_GS_CAN_DfuDetachRequested(USBD_HandleTypeDef *pdev)
 	return hcan->dfu_detach_requested;
 }
 
-// Handle USB suspend event
 void USBD_GS_CAN_SuspendCallback(USBD_HandleTypeDef  *pdev)
 {
-	// Disable CAN and go off bus on USB suspend
+
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*) pdev->pClassData;
 
 	for (unsigned int i = 0; i < ARRAY_SIZE(hcan->channels); i++) {
