@@ -8,6 +8,13 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 ---
 
+## 硬件
+
+| HSCanT | HSCanT-Lite |
+| :---: | :---: |
+| [![HSCanT 带外壳](docs/images/hscant-1.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-1.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+| [![HSCanT 裸板](docs/images/hscant-2.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-2.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+
 ## 设备标识
 
 | 项目 | 值 |

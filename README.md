@@ -8,6 +8,13 @@ The gs_usb protocol, the USB descriptors and — the important part — candleLi
 
 ---
 
+## Hardware
+
+| HSCanT | HSCanT-Lite |
+| :---: | :---: |
+| [![HSCanT assembled](docs/images/hscant-1.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-1.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+| [![HSCanT bare board](docs/images/hscant-2.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-2.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+
 ## Device Identity
 
 | Item | Value |
