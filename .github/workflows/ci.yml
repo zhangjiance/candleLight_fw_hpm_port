@@ -132,8 +132,11 @@ jobs:
         env:
           GNURISCV_TOOLCHAIN_PATH: ${{ runner.temp }}/${{ env.XT_DIR }}
         run: |
-          "${GNURISCV_TOOLCHAIN_PATH}/bin/riscv-none-elf-size" \
-            "build/${{ matrix.preset }}/output/candle_usb2canfd.elf" | tee -a "$GITHUB_STEP_SUMMARY"
+          elf=$(find "build/${{ matrix.preset }}/output" -maxdepth 1 \
+            -name 'candle_usb2canfd-*.elf' -print -quit)
+          test -n "${elf}"
+          "${GNURISCV_TOOLCHAIN_PATH}/bin/riscv-none-elf-size" "${elf}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the images
         uses: actions/upload-artifact@v4
@@ -141,11 +144,11 @@ jobs:
           name: ${{ matrix.preset }}
           if-no-files-found: error
           path: |
-            build/${{ matrix.preset }}/output/candle_usb2canfd.elf
-            build/${{ matrix.preset }}/output/candle_usb2canfd.bin
-            build/${{ matrix.preset }}/output/candle_usb2canfd.hex
-            build/${{ matrix.preset }}/output/candle_usb2canfd.map
-            build/${{ matrix.preset }}/output/candle_usb2canfd.uf2
+            build/${{ matrix.preset }}/output/candle_usb2canfd-*.elf
+            build/${{ matrix.preset }}/output/candle_usb2canfd-*.bin
+            build/${{ matrix.preset }}/output/candle_usb2canfd-*.hex
+            build/${{ matrix.preset }}/output/candle_usb2canfd-*.map
+            build/${{ matrix.preset }}/output/candle_usb2canfd-*.uf2
 
   release:
     name: publish ${{ github.ref_name }}
@@ -198,31 +201,34 @@ jobs:
       - name: Collect the release files
         run: |
           set -euo pipefail
-          # No archives, and no debug formats: the flashable images exactly as the
-          # build emits them - each board's DFU raw .bin (dfu-util -D) plus the
-          # HSCanT UF2 image (drop it on the bootloader's MSC volume).  Note the
-          # .bin of the uf2 preset is a different image, hence the explicit pick.
-          # HSCanT keeps the historical plain name; the other boards are suffixed.
-          dfu_bins=(
-            "hscant-dfu:candle_usb2canfd.bin"
-            "hscant-lite-dfu:candle_usb2canfd-hscant-lite.bin"
-            "hpm5100evk-dfu:candle_usb2canfd-hpm5100evk.bin"
-            "hpm5300evk-dfu:candle_usb2canfd-hpm5300evk.bin"
-            "hpm5e00evk-dfu:candle_usb2canfd-hpm5e00evk.bin"
-            "hpm6200evk-dfu:candle_usb2canfd-hpm6200evk.bin"
-            "hpm6800evk-dfu:candle_usb2canfd-hpm6800evk.bin"
-            "hpm6e00evk-dfu:candle_usb2canfd-hpm6e00evk.bin"
-            "hpm6p00evk-dfu:candle_usb2canfd-hpm6p00evk.bin"
+          # No archives, and no debug formats: the flashable images exactly as
+          # the build emits them - each board's DFU raw .bin (dfu-util -D) plus
+          # the HSCanT UF2 image (drop it on the bootloader's MSC volume).  CMake
+          # already puts the board name in every artifact, and the release keeps
+          # that name so the files cannot be mixed up.  The .bin inside the uf2
+          # preset is a different image, hence the explicit UF2 pick below.
+          dfu_presets=(
+            hscant-dfu
+            hscant-lite-dfu
+            hpm5100evk-dfu
+            hpm5300evk-dfu
+            hpm5e00evk-dfu
+            hpm6200evk-dfu
+            hpm6800evk-dfu
+            hpm6e00evk-dfu
+            hpm6p00evk-dfu
           )
-          for item in "${dfu_bins[@]}"; do
-            src="artifacts/${item%%:*}/candle_usb2canfd.bin"
-            dst="${item#*:}"
-            test -f "${src}"
-            cp "${src}" "${dst}"
+          for preset in "${dfu_presets[@]}"; do
+            src=$(find "artifacts/${preset}" -maxdepth 1 \
+              -name 'candle_usb2canfd-*.bin' -print -quit)
+            test -n "${src}"
+            cp "${src}" .
           done
-          test -f "artifacts/hscant-uf2/candle_usb2canfd.uf2"
-          cp artifacts/hscant-uf2/candle_usb2canfd.uf2 .
-          sha256sum candle_usb2canfd*.bin candle_usb2canfd.uf2 > sha256sums.txt
+          uf2=$(find artifacts/hscant-uf2 -maxdepth 1 \
+            -name 'candle_usb2canfd-*.uf2' -print -quit)
+          test -n "${uf2}"
+          cp "${uf2}" .
+          sha256sum candle_usb2canfd*.bin candle_usb2canfd*.uf2 > sha256sums.txt
           cat sha256sums.txt
 
       - name: Create the release
@@ -236,7 +242,7 @@ jobs:
           case "${TAG}" in
             *-rc*|*-beta*|*-alpha*) pre="--prerelease" ;;
           esac
-          files=(candle_usb2canfd*.bin candle_usb2canfd.uf2 sha256sums.txt)
+          files=(candle_usb2canfd*.bin candle_usb2canfd*.uf2 sha256sums.txt)
 
           # GitHub answers 5xx and timeouts from time to time; retry those
           # instead of failing a release that is otherwise fine.
@@ -257,6 +263,17 @@ jobs:
           # the next run fail with "already exists" - only the assets matter.
           if gh release view "${TAG}" > /dev/null 2>&1; then
             echo "release ${TAG} already exists, making sure the assets are there"
+            # Remove assets produced by an older build of this tag (for example
+            # the pre-board-name candle_usb2canfd.bin), or they would linger.
+            expected=" ${files[*]} "
+            gh release view "${TAG}" --json assets --jq '.assets[].name' |
+              while read -r name; do
+                case "${name}" in candle_usb2canfd*) ;; *) continue ;; esac
+                case "${expected}" in
+                  *" ${name} "*) ;;
+                  *) retry gh release delete-asset "${TAG}" "${name}" -y ;;
+                esac
+              done
             retry gh release upload "${TAG}" "${files[@]}" --clobber
           else
             retry gh release create "${TAG}" \

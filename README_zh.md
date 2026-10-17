@@ -286,9 +286,9 @@ bootloader 与 APP 在 Windows 下都通过 WCID 免驱，无需 Zadig、无需�
 # 从运行中的 APP 进入 DFU 并烧录
 #   dfu-util 的 -d 形式为 vendor[:product]，只给 VID 就够 —— 且 PID 变更时无需改命令：
 #   0x1d50 = 本 APP，0x34b7 = bootloader
-dfu-util.exe -d 1d50,34b7 -R -E 1 -s 0x80020000:leave -D candle_usb2canfd.bin
+dfu-util.exe -d 1d50,34b7 -R -E 1 -s 0x80020000:leave -D candle_usb2canfd-hscant.bin
 # 或直接指定 bootloader
-dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D candle_usb2canfd.bin
+dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D candle_usb2canfd-hscant.bin
 ```
 
 每块板子都上报由芯片 UUID 推导出的**唯一** `iSerialNumber`，因此可以同时接入多台设备；用 `dfu-util -l` 列出序列号，再用 `-S <serial>` 指定目标。
@@ -303,7 +303,7 @@ dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D candle_usb2canfd.bin
 
 ```bash
 cmake --preset hscant-uf2 && cmake --build --preset hscant-uf2
-cp build/hscant-uf2/output/candle_usb2canfd.uf2 /media/$USER/HPM/
+cp build/hscant-uf2/output/candle_usb2canfd-hscant.uf2 /media/$USER/HPM/
 ```
 
 运行期想回到 bootloader：长按用户按键约 500 ms。APP 会在共享的 `bl_setting` 块（`src/bl_setting.c`）中置 `keep_bootloader`，再经 ROM 引导流程重新进入。该形态不暴露 DFU runtime 接口，因此也不存在 `DETACH` 请求路径。
@@ -352,7 +352,7 @@ cmake --preset hscant-dfu
 cmake --build --preset hscant-dfu
 ```
 
-产物位于 `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin`（`flash_uf2` 预设另有 `.uf2`）。
+产物位于 `build/<preset>/output/candle_usb2canfd-<BOARD>.elf` / `.hex` / `.bin`（`flash_uf2` 预设另有 `.uf2`），其中 `<BOARD>` 是板名（例如 `candle_usb2canfd-hpm5300evk.bin`）。
 
 ---
 

@@ -44,8 +44,6 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-set(APP_NAME candle_usb2canfd)
-
 # RISC-V architecture
 set(RV_ARCH "rv32imac_zicsr_zifencei")
 set(RV_ABI "ilp32")
@@ -75,6 +73,12 @@ if(BOARD STREQUAL "hpmicro_evk")
         "the hpm_sdk EVK (e.g. -DBOARD=hpm5300evk); the build then defines "
         "BOARD_hpmicro_evk automatically.")
 endif()
+
+# Artifact names carry the board so images built in the same tree/release can
+# never be confused: candle_usb2canfd-<BOARD>.elf/.bin/.hex/.map (and .uf2).
+# APP_NAME feeds the SDK's APP_ELF_NAME etc., so this has to be set before
+# find_package(hpm-sdk).
+set(APP_NAME "candle_usb2canfd-${BOARD}")
 
 # Custom board search path (boards/<BOARD>)
 if(NOT DEFINED BOARD_SEARCH_PATH AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/boards)

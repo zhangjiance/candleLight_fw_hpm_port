@@ -200,16 +200,20 @@ Each flavour pairs with a different bootloader:
 ## 4. Build Artifacts
 
 ```
-build/<preset>/output/candle_usb2canfd.elf
-build/<preset>/output/candle_usb2canfd.hex
-build/<preset>/output/candle_usb2canfd.bin
-build/<preset>/output/candle_usb2canfd.uf2   # flash_uf2 presets only
+build/<preset>/output/candle_usb2canfd-<BOARD>.elf
+build/<preset>/output/candle_usb2canfd-<BOARD>.hex
+build/<preset>/output/candle_usb2canfd-<BOARD>.bin
+build/<preset>/output/candle_usb2canfd-<BOARD>.uf2   # flash_uf2 presets only
 ```
 
 - `.elf` — for debugging / OpenOCD flashing;
 - `.hex` — Intel HEX, for flashing tools;
 - `.bin` — raw image, **this is what you feed to `dfu-util -D`**;
 - `.uf2` — UF2 image, **this is what you drop onto the bootloader's MSC volume**.
+
+`<BOARD>` is the board name (`hscant`, `hscant-lite`, `hpm5300evk`, ...), so the
+images for different boards never share a file name, e.g.
+`candle_usb2canfd-hpm5300evk.bin`.
 
 Key build configuration (see `CMakeLists.txt`):
 
@@ -271,7 +275,7 @@ Nothing in `port/` or `src/` has to change.
 ```bash
 # -d takes vendor[:product]; the bootloader's PID is not pinned, so match on the
 # HPMicro VID (0x34b7) only -- this keeps working across PID changes
-dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D build/hscant-dfu/output/candle_usb2canfd.bin
+dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D build/hscant-dfu/output/candle_usb2canfd-hscant.bin
 ```
 
 4. On Linux the device should appear as a `gs_usb` interface and `candump` / `cansend` should work on the new `canN` netdevices. On Windows no driver is needed (WCID → WinUSB).

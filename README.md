@@ -294,9 +294,9 @@ Both the bootloader and the application are driver-less on Windows via WCID, so 
 # enter DFU from the running application, then write the image
 #   dfu-util's -d takes vendor[:product], so a VID alone is enough -- and it keeps
 #   working when a PID changes: 0x1d50 = this application, 0x34b7 = the bootloader
-dfu-util.exe -d 1d50,34b7 -R -E 1 -s 0x80020000:leave -D candle_usb2canfd.bin
+dfu-util.exe -d 1d50,34b7 -R -E 1 -s 0x80020000:leave -D candle_usb2canfd-hscant.bin
 # or target the bootloader directly
-dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D candle_usb2canfd.bin
+dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D candle_usb2canfd-hscant.bin
 ```
 
 Every board reports a **unique** `iSerialNumber` derived from the chip UUID, so multiple devices can be attached at once; use `dfu-util -l` and `-S <serial>` to select one.
@@ -313,7 +313,7 @@ one. Build an image and copy the `.uf2` onto the volume it exposes:
 
 ```bash
 cmake --preset hscant-uf2 && cmake --build --preset hscant-uf2
-cp build/hscant-uf2/output/candle_usb2canfd.uf2 /media/$USER/HPM/
+cp build/hscant-uf2/output/candle_usb2canfd-hscant.uf2 /media/$USER/HPM/
 ```
 
 To get back into the bootloader at run time, long-press the user button (~500 ms):
@@ -378,7 +378,7 @@ cmake --preset hscant-dfu
 cmake --build --preset hscant-dfu
 ```
 
-Artifacts land in `build/<preset>/output/candle_usb2canfd.elf` / `.hex` / `.bin` (and `.uf2` for the `flash_uf2` presets).
+Artifacts land in `build/<preset>/output/candle_usb2canfd-<BOARD>.elf` / `.hex` / `.bin` (and `.uf2` for the `flash_uf2` presets), where `<BOARD>` is the board name (e.g. `candle_usb2canfd-hpm5300evk.bin`).
 
 ---
 

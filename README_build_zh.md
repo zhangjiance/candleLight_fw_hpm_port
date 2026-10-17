@@ -198,16 +198,19 @@ EVK 在本工程中**只使用 DFU**（不生成 UF2）：本工程唯一兼容�
 ## 4. 编译产物
 
 ```
-build/<preset>/output/candle_usb2canfd.elf
-build/<preset>/output/candle_usb2canfd.hex
-build/<preset>/output/candle_usb2canfd.bin
-build/<preset>/output/candle_usb2canfd.uf2   # 仅 flash_uf2 预设
+build/<preset>/output/candle_usb2canfd-<BOARD>.elf
+build/<preset>/output/candle_usb2canfd-<BOARD>.hex
+build/<preset>/output/candle_usb2canfd-<BOARD>.bin
+build/<preset>/output/candle_usb2canfd-<BOARD>.uf2   # 仅 flash_uf2 预设
 ```
 
 - `.elf`：用于调试 / OpenOCD 烧录；
 - `.hex`：Intel HEX 格式，便于烧录工具写入；
 - `.bin`：裸镜像，**就是喂给 `dfu-util -D` 的文件**；
 - `.uf2`：UF2 镜像，**拖入 boot 暴露的 MSC 盘符即可烧录**。
+
+`<BOARD>` 是板名（`hscant`、`hscant-lite`、`hpm5300evk` 等），因此不同板卡的镜像不会重名，例如
+`candle_usb2canfd-hpm5300evk.bin`。
 
 工程配置要点（见 `CMakeLists.txt`）：
 
@@ -268,7 +271,7 @@ cmake --build build/manual -j8
 ```bash
 # -d 的形式为 vendor[:product]；bootloader 的 PID 并未固定，因此只匹配
 # HPMicro 的 VID（0x34b7）即可 —— PID 变更时命令无需修改
-dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D build/hscant-dfu/output/candle_usb2canfd.bin
+dfu-util.exe -d 34b7 -a 0 -s 0x80020000:leave -D build/hscant-dfu/output/candle_usb2canfd-hscant.bin
 ```
 
 4. Linux 下设备应作为 `gs_usb` 接口出现，`candump` / `cansend` 可在新增的 `canN` 网卡上使用；Windows 下无需任何驱动（WCID → WinUSB）。
