@@ -14,10 +14,10 @@
 #   port/    = platform seam  (HAL, CMSIS, STM32 USBD types, board layout header)
 #   src/     = HPMicro implementation (CherryUSB bridge, MCAN, timer, DFU)
 #   boards/<BOARD>/ = board package (clock tree, pad muxing, CAN clock, LED,
-#                     DFU signature).  Select it with -DBOARD=<name> and add a
-#                     matching BOARD_<name> block in candleLight_fw/include/config.h
-#                     ('-' in <name> becomes '_' in that macro, e.g. hscant-lite
-#                     maps to a BOARD_hscant_lite block).
+#                     DFU signature).  Select it with -DBOARD=<name>; the name
+#                     must have a matching BOARD_<name> block in
+#                     candleLight_fw/include/config.h ('-' in <name> becomes '_'
+#                     in that macro, e.g. hscant-lite -> BOARD_hscant_lite).
 #
 # Two bootloader flavours are supported, selected by HPM_BUILD_TYPE:
 #
@@ -49,7 +49,6 @@ set(HPM_SDK_LD_NO_NANO_SPECS 1)
 set(CONFIG_CHERRYUSB 1)
 set(CONFIG_USB_DEVICE 1)
 set(CONFIG_CHERRYUSB_DEVICE 1)
-# WS2812 status LEDs are driven over SPI1 with DMA (components/spi + dma_mgr).
 set(CONFIG_HPM_SPI 1)
 set(CONFIG_DMA_MGR 1)
 
@@ -175,7 +174,6 @@ sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/port_device.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/port_board.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/bl_setting.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/wdt_hpm.c)
-# Status LEDs on the HSCanT's WS2812 chain (SPI1 + DMA).
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/ws2812.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/status_led.c)
 

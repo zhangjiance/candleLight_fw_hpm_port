@@ -92,6 +92,10 @@ cmake --build --preset hscant-dfu
 # UF2 image (Release) - pairs with the device's stock UF2/MSC boot
 cmake --preset hscant-uf2
 cmake --build --preset hscant-uf2
+
+# HSCanT-Lite is DFU-only (no UF2 image)
+cmake --preset hscant-lite-dfu
+cmake --build --preset hscant-lite-dfu
 ```
 
 Presets are Release by default; each flavour also has a Debug variant:
@@ -118,7 +122,7 @@ cmake --preset hscant-uf2 --fresh     # needs CMake >= 3.24
 | Board | DFU release | DFU debug | UF2 release | UF2 debug | `BOARD` |
 | --- | --- | --- | --- | --- | --- |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
-| HSCanT-Lite | — (not yet tested) | — | — | — | `hscant-lite` |
+| HSCanT-Lite | `hscant-lite-dfu` | `hscant-lite-dfu-debug` | — | — | `hscant-lite` |
 
 The `hscant-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`); the `hscant-uf2` presets inherit `base-uf2` (`HPM_BUILD_TYPE=flash_uf2`). The `-debug` variants inherit `base-debug` / `base-uf2-debug`. List them with:
 
@@ -126,7 +130,7 @@ The `hscant-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash
 cmake --list-presets
 ```
 
-> **HSCanT-Lite is not yet tested**, so it intentionally has **no preset**. The `boards/hscant-lite/` package is in place, but building it also needs a `BOARD_hscant_lite` block in `candleLight_fw/include/config.h` (an untouched submodule); once that is added, configure it with `-DBOARD=hscant-lite -DHPM_BUILD_TYPE=flash_dfu`.
+> **HSCanT-Lite** now has both the `BOARD_hscant_lite` config block and the board package, and its `hscant-lite-dfu` / `hscant-lite-dfu-debug` presets build. It is **DFU-only**: there is no UF2 preset or image for this board. The four CAN channels, the eight GPIO LEDs (one status plus one error LED per channel) and the PA03 BOOT button should still be validated on hardware.
 
 ### 3.3 Boot image flavours
 

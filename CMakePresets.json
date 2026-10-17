@@ -78,6 +78,24 @@
                 "BOARD": "hscant"
             },
             "binaryDir": "${sourceDir}/build/hscant-uf2-debug"
+        },
+        {
+            "name": "hscant-lite-dfu",
+            "displayName": "HSCanT-Lite - DFU image (Release)",
+            "inherits": "base",
+            "cacheVariables": {
+                "BOARD": "hscant-lite"
+            },
+            "binaryDir": "${sourceDir}/build/hscant-lite-dfu"
+        },
+        {
+            "name": "hscant-lite-dfu-debug",
+            "displayName": "HSCanT-Lite - DFU image (Debug)",
+            "inherits": "base-debug",
+            "cacheVariables": {
+                "BOARD": "hscant-lite"
+            },
+            "binaryDir": "${sourceDir}/build/hscant-lite-dfu-debug"
         }
     ],
     "buildPresets": [
@@ -103,6 +121,18 @@
             "name": "hscant-uf2-debug",
             "displayName": "Build HSCanT - UF2 image (Debug)",
             "configurePreset": "hscant-uf2-debug",
+            "jobs": 8
+        },
+        {
+            "name": "hscant-lite-dfu",
+            "displayName": "Build HSCanT-Lite - DFU image (Release)",
+            "configurePreset": "hscant-lite-dfu",
+            "jobs": 8
+        },
+        {
+            "name": "hscant-lite-dfu-debug",
+            "displayName": "Build HSCanT-Lite - DFU image (Debug)",
+            "configurePreset": "hscant-lite-dfu-debug",
             "jobs": 8
         }
     ]

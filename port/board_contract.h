@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "hpm_common.h"
@@ -32,3 +33,12 @@ void board_init_usb(USB_Type *ptr);
 void board_delay_ms(uint32_t ms);
 void init_can_pins(MCAN_Type *ptr);
 uint32_t board_init_can_clock(MCAN_Type *ptr);
+
+/* --- optional: discrete per-channel LEDs ---------------------------------- */
+#if defined(BOARD_HAS_CHAN_LEDS) && BOARD_HAS_CHAN_LEDS
+#ifndef BOARD_CHAN_LED_COUNT
+#error "board package: BOARD_HAS_CHAN_LEDS is set but BOARD_CHAN_LED_COUNT is missing"
+#endif
+/* error == false: channel status LED, error == true: channel error LED. */
+void board_chan_led_set(uint8_t channel, bool error, bool on);
+#endif

@@ -78,13 +78,6 @@ __attribute__ ((section(".nor_cfg_option"), used)) const uint32_t option[4] = {0
 ATTR_PLACE_AT(".uf2_signature") __attribute__((used)) const uint32_t uf2_signature = BOARD_UF2_SIGNATURE;
 #endif
 
-/*
- * DFU signature.  hpm_dfu_boot only jumps into the application if the first
- * word at USBD_DFU_APP_DEFAULT_ADD equals BOARD_DFU_SIGNATURE, so the
- * application must reserve it in front of its vector table (flash_dfu.ld).
- * (hpm_dfu_boot's hscant-lite board did not need this because it is the
- * bootloader itself.)
- */
 #if defined(FLASH_DFU) && FLASH_DFU
 ATTR_PLACE_AT(".dfu_signature") __attribute__((used)) const uint32_t dfu_signature = BOARD_DFU_SIGNATURE;
 #endif
@@ -219,18 +212,12 @@ void board_init_clock(void)
     /* Connect Group0 to CPU0 */
     clock_connect_group_to_cpu(0, 0);
 
-    /* Note: When using an external DCDC, don't set the internal DCDC voltage. The following call of pcfg_dcdc_set_voltage() function should be commented out. */
     /* Bump up DCDC voltage to 1275mv */
     pcfg_dcdc_set_voltage(HPM_PCFG, 1275);
 
     /* Configure CPU to 480MHz, AXI/AHB to 160MHz */
     sysctl_config_cpu0_domain_clock(HPM_SYSCTL, clock_source_pll0_clk0, 2, 3);
-    /* Configure PLL0 Post Divider */
-    /* PLL0CLK0: 960MHz */
-    /* PLL0CLK1: 600MHz */
-    /* PLL0CLK2: 400MHz */
-    /* Configure PLL0 Frequency to 960MHz */
-    /* Configure mchtmr to 24MHz */
+    /* PLL0 / PLL1 and every clock source/divider */
     init_board_clock_source();
 
     clock_update_core_clock();
@@ -277,9 +264,106 @@ void board_timer_create(uint32_t ms, board_timer_cb cb)
 }
 #endif
 
+typedef struct {
+    GPIO_Type *ctrl;
+    uint32_t group;
+    uint8_t pin;
+    uint8_t on_level;
+    uint8_t off_level;
+} chan_led_t;
+
+
+/* White status LEDs (odd, active low). */
+static const chan_led_t s_chan_status_led[BOARD_CHAN_LED_COUNT] = {
+    { HPM_FGPIO, GPIO_DO_GPIOA, 26U, 0U, 1U }, /* CAN0 status: LED1 / PA26 */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 28U, 0U, 1U }, /* CAN1 status: LED3 / PA28 */
+    { HPM_FGPIO, GPIO_DO_GPIOB, 10U, 0U, 1U }, /* CAN2 status: LED5 / PB10 */
+    { HPM_FGPIO, GPIO_DO_GPIOB, 8U,  0U, 1U }, /* CAN3 status: LED7 / PB08 */
+};
+
+/* Red error LEDs (even, active high). */
+static const chan_led_t s_chan_error_led[BOARD_CHAN_LED_COUNT] = {
+    { HPM_FGPIO, GPIO_DO_GPIOA, 2U,  1U, 0U }, /* CAN0 error: LED0 / PA02 */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 27U, 1U, 0U }, /* CAN1 error: LED2 / PA27 */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 10U, 1U, 0U }, /* CAN2 error: LED4 / PA10 */
+    { HPM_FGPIO, GPIO_DO_GPIOB, 9U,  1U, 0U }, /* CAN3 error: LED6 / PB09 */
+};
+
+/*
+ * Generic heartbeat (bootloader / hello_world): white/red alternating, one
+ * pair per channel (TR then STA): LED1, LED0, LED3, LED2, LED5, LED4, LED7,
+ * LED6.  The per-LED levels keep the two polarities apart.
+ */
+static const chan_led_t s_activity_led[BOARD_ACTIVITY_LED_COUNT] = {
+    { HPM_FGPIO, GPIO_DO_GPIOA, 26U, 0U, 1U }, /* LED1 white */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 2U,  1U, 0U }, /* LED0 red */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 28U, 0U, 1U }, /* LED3 white */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 27U, 1U, 0U }, /* LED2 red */
+    { HPM_FGPIO, GPIO_DO_GPIOB, 10U, 0U, 1U }, /* LED5 white */
+    { HPM_FGPIO, GPIO_DO_GPIOA, 10U, 1U, 0U }, /* LED4 red */
+    { HPM_FGPIO, GPIO_DO_GPIOB, 8U,  0U, 1U }, /* LED7 white */
+    { HPM_FGPIO, GPIO_DO_GPIOB, 9U,  1U, 0U }, /* LED6 red */
+};
+
+/* Heartbeat state used by board_led_write()/board_led_toggle(). */
+static uint8_t s_activity_led_index;
+static uint8_t s_activity_led_lit;
+
+static void led_write(const chan_led_t *led, bool on)
+{
+    gpio_write_pin(led->ctrl, led->group, led->pin,
+                   on ? led->on_level : led->off_level);
+}
+
+void board_chan_led_set(uint8_t channel, bool error, bool on)
+{
+    if (channel >= BOARD_CHAN_LED_COUNT) {
+        return;
+    }
+
+    led_write(error ? &s_chan_error_led[channel] : &s_chan_status_led[channel], on);
+}
+
 void board_init_led_pins(void)
 {
     init_led_pins();
+
+    for (uint8_t channel = 0U; channel < BOARD_CHAN_LED_COUNT; channel++) {
+        led_write(&s_chan_status_led[channel], false);
+        led_write(&s_chan_error_led[channel], false);
+    }
+
+    s_activity_led_index = 0U;
+    s_activity_led_lit = 0U;
+}
+
+void board_led_write(uint8_t state)
+{
+    if (state == BOARD_LED_ON_LEVEL) {
+        if (!s_activity_led_lit) {
+            s_activity_led_index = 0U;
+        }
+        led_write(&s_activity_led[s_activity_led_index], true);
+        s_activity_led_lit = 1U;
+    } else {
+        for (uint8_t i = 0U; i < BOARD_ACTIVITY_LED_COUNT; i++) {
+            led_write(&s_activity_led[i], false);
+        }
+        s_activity_led_lit = 0U;
+    }
+}
+
+void board_led_toggle(void)
+{
+    if (s_activity_led_lit) {
+        led_write(&s_activity_led[s_activity_led_index], false);
+        s_activity_led_index = (uint8_t)((s_activity_led_index + 1U) % BOARD_ACTIVITY_LED_COUNT);
+    } else {
+        s_activity_led_index = 0U;
+        s_activity_led_lit = 1U;
+    }
+
+    led_write(&s_activity_led[s_activity_led_index], true);
 }
 
 void board_init_usb(USB_Type *ptr)
@@ -295,16 +379,6 @@ void board_init_usb(USB_Type *ptr)
         /* As QFN48 and LQFP64 has no vbus pin, so should be call usb_phy_using_internal_vbus() API to use internal vbus. */
         usb_phy_using_internal_vbus(ptr);
     }
-}
-
-void board_led_write(uint8_t state)
-{
-    gpio_write_pin(BOARD_LED_GPIO_CTRL, BOARD_LED_GPIO_INDEX, BOARD_LED_GPIO_PIN, state);
-}
-
-void board_led_toggle(void)
-{
-    gpio_toggle_pin(BOARD_LED_GPIO_CTRL, BOARD_LED_GPIO_INDEX, BOARD_LED_GPIO_PIN);
 }
 
 void board_init_uart(UART_Type *ptr)
@@ -418,8 +492,6 @@ void init_usb_pins(USB_Type *ptr)
 void init_can_pins(MCAN_Type *ptr)
 {
     if (ptr == HPM_MCAN0) {
-        /* NOTE: hpm_dfu_boot called init_mcan3_pins() here by mistake; each
-         * MCAN has its own pad pair on this board. */
         init_mcan0_pins();
     }
     else if (ptr == HPM_MCAN1) {

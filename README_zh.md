@@ -44,7 +44,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | --- | --- |
 | 错误上报回归 | 逐类系统性验证：`CAN_ERR_ACK`、`PROT`（stuff / form / bit / CRC）、`CRTL`（warning、passive）、`BUSOFF`、`RESTARTED`（bus-off 恢复）、RX overrun（`GS_CAN_FLAG_OVERFLOW`），以及 payload 里的 TEC/REC |
 | 性能测试 | USB 高速下的帧速率、多通道同时打流、`RX dropped/missed`、TX 延迟。USB 已经是高速，所以瓶颈在 CAN 波特率与每帧的主机侧开销，而不是链路 |
-| WS2812 收发指示灯 | 尚未实现；`boards/hscant/` 目前只驱动 GPIOB[10] 上的 `SYS_LED` |
+| 通道指示灯 | HSCanT：8 颗 WS2812（SPI1 + DMA），CAN0..3 各一对 TX/RX；HSCanT-Lite：8 颗 GPIO LED，每通道一颗白色状态灯（启动后常亮，收发时闪烁）+ 一颗红色错误灯（故障时闪烁，正常熄灭） |
 
 ### 向主机上报的特性位
 
@@ -143,7 +143,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 ### 第 4 层 —— `boards/<BOARD>/`
 
-板级包：时钟树、引脚复用、CAN 时钟选择、LED、DFU 签名，以及 DFU 复位请求所用的保留寄存器。目前有两个包：`hscant` 与 `hscant-lite`（后者**待测试**）。
+板级包：时钟树、引脚复用、CAN 时钟选择、LED、DFU 签名，以及 DFU 复位请求所用的保留寄存器。目前有两个包：`hscant`（WS2812 指示灯）与 `hscant-lite`（每通道状态灯 + 收发灯的 GPIO 指示灯，PA03 BOOT 按键）。
 
 ---
 
@@ -219,7 +219,7 @@ candleLight_fw_hpm_port/
 ├── CMakePresets.json           # 各板预设（flash_dfu + flash_uf2）
 ├── boards/
 │   ├── hscant/                 # 板级包（时钟、引脚复用、CAN 时钟、LED）
-│   └── hscant-lite/            # 板级包（待测试）
+│   └── hscant-lite/            # 板级包（GPIO 通道指示灯）
 ├── port/                       # 平台接缝：不含硬件代码
 │   ├── hal_include.h           # STM32 风格 HAL 垫片
 │   ├── cmsis_device.h          # RISC-V CMSIS 垫片

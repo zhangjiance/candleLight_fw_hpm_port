@@ -3,15 +3,14 @@
 
 #include "board.h"
 #include "hal_include.h" /* HAL_GetTick */
+
+#if defined(BOARD_HAS_WS2812) && BOARD_HAS_WS2812
+
 #include "ws2812.h"
 
 /* A board with a strip must also give its LED count, or LED_COUNT falls back to 0. */
-#if defined(BOARD_HAS_WS2812) && BOARD_HAS_WS2812 && !defined(BOARD_WS2812_LED_COUNT)
+#if !defined(BOARD_WS2812_LED_COUNT)
 #error "BOARD_HAS_WS2812 is set but BOARD_WS2812_LED_COUNT is missing"
-#endif
-
-#ifndef BOARD_WS2812_LED_COUNT
-#define BOARD_WS2812_LED_COUNT 0
 #endif
 
 #define LED_COUNT              BOARD_WS2812_LED_COUNT
@@ -187,6 +186,13 @@ void status_led_activity(uint8_t channel, bool rx)
     }
 }
 
+void status_led_error(uint8_t channel, bool active)
+{
+    /* The WS2812 chain has no dedicated error LED. */
+    (void)channel;
+    (void)active;
+}
+
 void status_led_tick(void)
 {
     const uint32_t now = HAL_GetTick();
@@ -232,3 +238,174 @@ void status_led_tick(void)
         s_last_render_ms = now;
     }
 }
+
+/* ---------------------------------------------------------------------------
+ * Backend 2: discrete GPIO LEDs (hscant-lite)
+ *
+ * White status LED: steady on while the channel is started, with a short dark
+ * window on traffic so TX/RX reads as a flash.
+ * Red error LED: blinks while an error is latched, off otherwise.
+ * The board package owns the pads and the per-LED polarity.
+ * ------------------------------------------------------------------------- */
+#elif defined(BOARD_HAS_CHAN_LEDS) && BOARD_HAS_CHAN_LEDS
+
+#include "board_contract.h"
+
+/* Traffic shows as a short dark window on the otherwise steady status LED. */
+#define STATUS_OFF_MS      (30U)
+#define STATUS_REARM_MS    (60U)
+
+/* One error keeps the red LED blinking this long, so even a single error is visible. */
+#define ERROR_HOLD_MS      (500U)
+#define ERROR_BLINK_MS     (100U)
+
+static bool s_chan_on[BOARD_CHAN_LED_COUNT];
+static bool s_status_painted[BOARD_CHAN_LED_COUNT];
+static bool s_error_painted[BOARD_CHAN_LED_COUNT];
+static uint32_t s_status_off_until[BOARD_CHAN_LED_COUNT];
+static uint32_t s_status_rearm_at[BOARD_CHAN_LED_COUNT];
+static uint32_t s_error_until[BOARD_CHAN_LED_COUNT];
+static bool s_ready;
+
+static void paint(uint8_t channel, bool error, bool on)
+{
+    bool *painted = error ? &s_error_painted[channel] : &s_status_painted[channel];
+
+    if (*painted == on) {
+        return;
+    }
+
+    *painted = on;
+    board_chan_led_set(channel, error, on);
+}
+
+void status_led_init(void)
+{
+    /* board_init() already did this; repeat it so the LED layer is self-contained. */
+    board_init_led_pins();
+
+    for (uint8_t channel = 0U; channel < BOARD_CHAN_LED_COUNT; channel++) {
+        s_chan_on[channel] = false;
+        s_status_painted[channel] = false;
+        s_error_painted[channel] = false;
+        s_status_off_until[channel] = 0U;
+        s_status_rearm_at[channel] = 0U;
+        s_error_until[channel] = 0U;
+        board_chan_led_set(channel, false, false);
+        board_chan_led_set(channel, true, false);
+    }
+
+    s_ready = true;
+}
+
+void status_led_boot_anim(void)
+{
+    /* Application-level power-on chase: eight steps, 30 ms apart, then blank. */
+    for (uint8_t step = 0U; step < BOARD_ACTIVITY_LED_COUNT; step++) {
+        board_led_toggle();
+        board_delay_ms(30U);
+    }
+    board_led_write(BOARD_LED_OFF_LEVEL);
+}
+
+void status_led_channel(uint8_t channel, bool enabled)
+{
+    if (channel >= BOARD_CHAN_LED_COUNT) {
+        return;
+    }
+
+    s_chan_on[channel] = enabled;
+
+    if (!enabled) {
+        s_status_off_until[channel] = 0U;
+        s_status_rearm_at[channel] = 0U;
+        s_error_until[channel] = 0U;
+        paint(channel, false, false);
+        paint(channel, true, false);
+    } else {
+        /* A fresh start: white status on, red error off until a fault appears. */
+        s_error_until[channel] = 0U;
+        paint(channel, true, false);
+        paint(channel, false, true);
+    }
+}
+
+void status_led_activity(uint8_t channel, bool rx)
+{
+    const uint32_t now = HAL_GetTick();
+    (void)rx; /* one shared status LED per channel */
+
+    if ((!s_ready) || (channel >= BOARD_CHAN_LED_COUNT) || (!s_chan_on[channel])) {
+        return;
+    }
+
+    if ((int32_t)(now - s_status_rearm_at[channel]) >= 0) {
+        s_status_off_until[channel] = now + STATUS_OFF_MS;
+        s_status_rearm_at[channel] = now + STATUS_REARM_MS;
+    }
+}
+
+void status_led_error(uint8_t channel, bool active)
+{
+    const uint32_t now = HAL_GetTick();
+
+    if ((!s_ready) || (channel >= BOARD_CHAN_LED_COUNT)) {
+        return;
+    }
+
+    if (!s_chan_on[channel]) {
+        s_error_until[channel] = 0U;
+        paint(channel, true, false);
+        return;
+    }
+
+    if (active) {
+        /* Latch so even a single transient error is visible. */
+        s_error_until[channel] = now + ERROR_HOLD_MS;
+    }
+}
+
+void status_led_tick(void)
+{
+    const uint32_t now = HAL_GetTick();
+
+    if (!s_ready) {
+        return;
+    }
+
+    for (uint8_t channel = 0U; channel < BOARD_CHAN_LED_COUNT; channel++) {
+        const bool status_on = s_chan_on[channel] &&
+                               ((int32_t)(now - s_status_off_until[channel]) >= 0);
+        const bool error_active = (int32_t)(now - s_error_until[channel]) < 0;
+        const bool error_on = error_active && (((now / ERROR_BLINK_MS) & 1U) != 0U);
+
+        paint(channel, false, status_on);
+        paint(channel, true, error_on);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * Backend 3: no LEDs at all
+ * ------------------------------------------------------------------------- */
+#else
+
+void status_led_init(void) {}
+void status_led_boot_anim(void) {}
+void status_led_channel(uint8_t channel, bool enabled)
+{
+    (void)channel;
+    (void)enabled;
+}
+void status_led_activity(uint8_t channel, bool rx)
+{
+    (void)channel;
+    (void)rx;
+}
+void status_led_error(uint8_t channel, bool active)
+{
+    (void)channel;
+    (void)active;
+}
+void status_led_tick(void) {}
+
+#endif

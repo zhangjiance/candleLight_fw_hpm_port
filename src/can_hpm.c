@@ -323,14 +323,27 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
     return true;
 }
 
+static void can_update_error_led(can_data_t *channel, uint32_t err)
+{
+    const uint8_t lec = (uint8_t)MCAN_PSR_LEC_GET(err);
+    const bool active =
+        ((err & (MCAN_PSR_BO_MASK | MCAN_PSR_EP_MASK | MCAN_PSR_EW_MASK)) != 0U) ||
+        ((lec != 0x0U) && (lec != 0x7U));
+
+    status_led_error((uint8_t)channel->nr, active);
+}
+
 uint32_t can_get_error_status(can_data_t *channel)
 {
     /* PSR.LEC is read-once and the caller drops it while RX is pending: return the last status. */
     if (can_is_rx_pending(channel)) {
+        can_update_error_led(channel, channel->last_err);
         return channel->last_err;
     }
 
-    return channel->channel.Instance->PSR;
+    const uint32_t err = channel->channel.Instance->PSR;
+    can_update_error_led(channel, err);
+    return err;
 }
 
 void can_manage_bus_off_recovery(can_data_t *channel, uint32_t err)

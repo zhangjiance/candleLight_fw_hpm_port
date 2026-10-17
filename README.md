@@ -44,7 +44,7 @@ The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `D
 | --- | --- |
 | Error reporting regression | Exercise every class systematically: `CAN_ERR_ACK`, `PROT` (stuff / form / bit / CRC), `CRTL` (warning, passive), `BUSOFF`, `RESTARTED` (bus-off recovery), RX overrun (`GS_CAN_FLAG_OVERFLOW`), plus the TEC/REC fields in the payload |
 | Performance testing | Frames/s over USB High-Speed, multi-channel stress (`cangen` on several channels at once), `RX dropped/missed`, TX latency. USB is already HS, so the ceiling is the CAN bit rate and the per-frame host overhead, not the link |
-| WS2812 TX/RX LEDs | Still missing; `boards/hscant/` currently drives only the single `SYS_LED` on GPIOB[10] |
+| Channel LEDs | HSCanT: eight WS2812 LEDs (SPI1 + DMA), one TX/RX pair per CAN0..3 channel. HSCanT-Lite: eight GPIO LEDs per channel set, one white status LED (steady when started, flashes on traffic) plus one red error LED (blinks on faults, off otherwise) |
 
 ### Feature Flags Reported to the Host
 
@@ -143,7 +143,7 @@ Contains **no hardware code**, only contracts and shims:
 
 ### Layer 4 — `boards/<BOARD>/`
 
-Per-board package: clock tree, pad muxing, CAN clock selection, LED, DFU signature and the retention register used for the DFU reboot request. Two packages exist today: `hscant` and `hscant-lite` (the latter is **not yet tested**).
+Per-board package: clock tree, pad muxing, CAN clock selection, LED, DFU signature and the retention register used for the DFU reboot request. Two packages exist today: `hscant` (WS2812 LEDs) and `hscant-lite` (per-channel status + TX/RX GPIO LEDs, PA03 BOOT button).
 
 ---
 
@@ -227,7 +227,7 @@ candleLight_fw_hpm_port/
 ├── CMakePresets.json           # Per-board presets (flash_dfu + flash_uf2)
 ├── boards/
 │   ├── hscant/                 # Board package (clock, pinmux, CAN clock, LED)
-│   └── hscant-lite/            # Board package (not yet tested)
+│   └── hscant-lite/            # Board package (GPIO channel LEDs)
 ├── port/                       # Platform seam: no hardware code
 │   ├── hal_include.h           # STM32-style HAL shim
 │   ├── cmsis_device.h          # RISC-V CMSIS shim

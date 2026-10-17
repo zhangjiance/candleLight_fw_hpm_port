@@ -92,6 +92,10 @@ cmake --build --preset hscant-dfu
 # UF2 镜像（Release）—— 配合设备原版 UF2/MSC boot
 cmake --preset hscant-uf2
 cmake --build --preset hscant-uf2
+
+# HSCanT-Lite 只有 DFU 镜像，没有 UF2
+cmake --preset hscant-lite-dfu
+cmake --build --preset hscant-lite-dfu
 ```
 
 预设默认是 Release；每种形态同时提供 Debug 变体：
@@ -118,7 +122,7 @@ cmake --preset hscant-uf2 --fresh     # 需要 CMake >= 3.24
 | Board | DFU Release | DFU Debug | UF2 Release | UF2 Debug | `BOARD` |
 | --- | --- | --- | --- | --- | --- |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
-| HSCanT-Lite | —（待测试） | — | — | — | `hscant-lite` |
+| HSCanT-Lite | `hscant-lite-dfu` | `hscant-lite-dfu-debug` | — | — | `hscant-lite` |
 
 `hscant-dfu` 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`）；`hscant-uf2` 预设继承 `base-uf2`（`HPM_BUILD_TYPE=flash_uf2`）；`-debug` 变体分别继承 `base-debug` / `base-uf2-debug`。查看全部 preset：
 
@@ -140,7 +144,7 @@ cmake --list-presets
 | `hscant-dfu` | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译 |
 | `hscant-uf2` | HSCanT 设备**原版闭源** UF2/MSC boot —— 修改自 CherryDAP 的 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。没有它的源码也能保持兼容；恢复出的契约见 [主 README](README_zh.md#引导程序与镜像兼容性)。 |
 
-> **HSCanT-Lite 尚未测试**，因此暂时**没有 preset**：`boards/hscant-lite/` 板级包已就位，但要构建它还需要在 `candleLight_fw/include/config.h`（未改动的子模块）中增加 `BOARD_hscant_lite` 分支；补齐后可用 `-DBOARD=hscant-lite -DHPM_BUILD_TYPE=flash_dfu` 手动配置。
+> **HSCanT-Lite** 的 `BOARD_hscant_lite` 分支与板级包已就位，`hscant-lite-dfu` / `hscant-lite-dfu-debug` preset 可正常构建。该板只使用 **DFU**，没有 UF2 preset 或镜像。4 路 CAN、8 颗 GPIO 指示灯（每通道状态灯 + 错误灯）和 PA03 BOOT 按键的实机功能仍建议上板验证。
 
 `HPM_BUILD_TYPE=flash_xip`（独立运行于 `0x80000000`）在本工程**没有任何 preset 使用**。
 

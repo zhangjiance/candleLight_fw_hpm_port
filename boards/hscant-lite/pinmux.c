@@ -19,15 +19,17 @@
 #include "hpm_gpio_drv.h"
 #include "hpm_gpiom_drv.h"
 
-#define CAN0_TR IOC_PAD_PA10
+/* Pinmux-tool net labels; the functional status/traffic mapping lives in
+ * board.c (status = even nets, traffic = odd nets). */
+#define CAN0_TR IOC_PAD_PA10 /* LED4 */
 #define BOOT IOC_PAD_PA03
-#define CAN0_STA IOC_PAD_PA02
-#define CAN1_TR IOC_PAD_PA26
-#define CAN1_STA IOC_PAD_PA27
-#define CAN2_TR IOC_PAD_PA28
-#define CAN2_STA IOC_PAD_PB08
-#define CAN3_TR IOC_PAD_PB09
-#define CAN3_STA IOC_PAD_PB10
+#define CAN0_STA IOC_PAD_PA02 /* LED0 */
+#define CAN1_TR IOC_PAD_PA26 /* LED1 */
+#define CAN1_STA IOC_PAD_PA27 /* LED2 */
+#define CAN2_TR IOC_PAD_PA28 /* LED3 */
+#define CAN2_STA IOC_PAD_PB08 /* LED7 */
+#define CAN3_TR IOC_PAD_PB09 /* LED6 */
+#define CAN3_STA IOC_PAD_PB10 /* LED5 */
 
 void init_mcan0_pins(void)
 {
@@ -77,7 +79,7 @@ void init_led_pins(void)
     gpiom_set_pin_controller(HPM_GPIOM, GPIOM_ASSIGN_GPIOA, 26, gpiom_core0_fast);
     gpiom_disable_pin_visibility(HPM_GPIOM, GPIOM_ASSIGN_GPIOA, 26, gpiom_soc_gpio0);
     gpio_set_pin_output(HPM_FGPIO, GPIO_OE_GPIOA, 26);
-    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOA, 26, 0);
+    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOA, 26, 1);
 
     HPM_IOC->PAD[CAN1_STA].FUNC_CTL = IOC_PA27_FUNC_CTL_GPIO_A_27;
 
@@ -91,14 +93,14 @@ void init_led_pins(void)
     gpiom_set_pin_controller(HPM_GPIOM, GPIOM_ASSIGN_GPIOA, 28, gpiom_core0_fast);
     gpiom_disable_pin_visibility(HPM_GPIOM, GPIOM_ASSIGN_GPIOA, 28, gpiom_soc_gpio0);
     gpio_set_pin_output(HPM_FGPIO, GPIO_OE_GPIOA, 28);
-    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOA, 28, 0);
+    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOA, 28, 1);
 
     HPM_IOC->PAD[CAN2_STA].FUNC_CTL = IOC_PB08_FUNC_CTL_GPIO_B_08;
 
     gpiom_set_pin_controller(HPM_GPIOM, GPIOM_ASSIGN_GPIOB, 8, gpiom_core0_fast);
     gpiom_disable_pin_visibility(HPM_GPIOM, GPIOM_ASSIGN_GPIOB, 8, gpiom_soc_gpio0);
     gpio_set_pin_output(HPM_FGPIO, GPIO_OE_GPIOB, 8);
-    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOB, 8, 0);
+    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOB, 8, 1);
 
     HPM_IOC->PAD[CAN3_TR].FUNC_CTL = IOC_PB09_FUNC_CTL_GPIO_B_09;
 
@@ -112,7 +114,7 @@ void init_led_pins(void)
     gpiom_set_pin_controller(HPM_GPIOM, GPIOM_ASSIGN_GPIOB, 10, gpiom_core0_fast);
     gpiom_disable_pin_visibility(HPM_GPIOM, GPIOM_ASSIGN_GPIOB, 10, gpiom_soc_gpio0);
     gpio_set_pin_output(HPM_FGPIO, GPIO_OE_GPIOB, 10);
-    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOB, 10, 0);
+    gpio_write_pin(HPM_FGPIO, GPIO_DO_GPIOB, 10, 1);
 }
 
 void init_usb0_pins(void)
