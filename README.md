@@ -10,10 +10,23 @@ The gs_usb protocol, the USB descriptors and — the important part — candleLi
 
 ## Hardware
 
+### HSCanT / HSCanT-Lite
+
 | HSCanT | HSCanT-Lite |
 | :---: | :---: |
-| [![HSCanT assembled](docs/images/hscant-1.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-1.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
-| [![HSCanT bare board](docs/images/hscant-2.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-2.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+| [![HSCanT](docs/images/hscant.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+
+### hpm_sdk EVK boards
+
+These EVK boards use their own board packages straight from hpm_sdk and are adapted as single-channel candle devices (DFU only):
+
+| HPM5100EVK | HPM5300EVK | HPM5E00EVK | HPM6200EVK |
+| :---: | :---: | :---: | :---: |
+| ![HPM5100EVK](docs/images/hpm5100evk.jpg) | ![HPM5300EVK](docs/images/hpm5300evk.png) | ![HPM5E00EVK](docs/images/hpm5e00evk.jpg) | ![HPM6200EVK](docs/images/hpm6200evk.jpg) |
+
+| HPM6800EVK | HPM6E00EVK | HPM6P00EVK |
+| :---: | :---: | :---: |
+| ![HPM6800EVK](docs/images/hpm6800evk.png) | ![HPM6E00EVK](docs/images/hpm6e00evk.jpg) | ![HPM6P00EVK](docs/images/hpm6p00evk.jpg) |
 
 ## Device Identity
 
@@ -24,8 +37,8 @@ The gs_usb protocol, the USB descriptors and — the important part — candleLi
 | Interface 0 | `gs_usb`, vendor specific `0xFF/0xFF/0xFF`, 2 bulk endpoints |
 | Interface 1 | DFU runtime `0xFE/0x01/0x01` (detach only, no endpoints) |
 | Windows driver | **none** — MS OS 1.0 / WCID makes Windows bind `winusb.sys` |
-| CAN | 4 × MCAN (Bosch M_CAN compatible), CAN-FD, 80 MHz CAN clock |
-| Flash layout | `hpm_dfu_boot` at `0x80000000`, this application at `0x80020000` |
+| CAN | 4 × MCAN (Bosch M_CAN compatible), CAN-FD, 80 MHz CAN clock (HSCanT/HSCanT-Lite); 1 × MCAN on the hpm_sdk EVK builds |
+| Flash layout | [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) at `0x80000000`, this application at `0x80020000` |
 
 ## Implementation Status
 
@@ -33,7 +46,7 @@ Tested means "exercised on real hardware". Please read this table before filing 
 
 | Area | State |
 | --- | --- |
-| DFU flashing together with `hpm_dfu_boot` | **Verified on hardware** |
+| DFU flashing together with [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) | **Verified on hardware** |
 | USB enumeration (High-Speed, driver-less on Windows via WCID) | **Verified on hardware** |
 | CAN / CAN-FD frame forwarding | **Verified on hardware** — classic and CAN-FD BRS, both directions, against a PEAK PCAN and channel-to-channel |
 | Multi-channel (4 × MCAN) operation | **Verified on hardware** — all four channels, including a three node bus |
@@ -150,7 +163,9 @@ Contains **no hardware code**, only contracts and shims:
 
 ### Layer 4 — `boards/<BOARD>/`
 
-Per-board package: clock tree, pad muxing, CAN clock selection, LED, DFU signature and the retention register used for the DFU reboot request. Two packages exist today: `hscant` (WS2812 LEDs) and `hscant-lite` (per-channel status + TX/RX GPIO LEDs, PA03 BOOT button).
+Per-board package: clock tree, pad muxing, CAN clock selection, LED, DFU signature and the retention register used for the DFU reboot request. Two packages live in this repository: `hscant` (WS2812 LEDs) and `hscant-lite` (per-channel status + TX/RX GPIO LEDs, PA03 BOOT button).
+
+**hpm_sdk EVKs are not copied here.** `BOARD=<evk>` selects the board package from `$HPM_SDK_BASE/boards/<evk>`, and `boards/hpmicro_evk/hpmicro_evk.h` maps it onto the candle contract (one `BOARD_APP_CAN_BASE` MCAN channel, USB0, user LED). The application is built as `BOARD_hpmicro_evk`, so any SDK EVK with MCAN + USB works by changing `BOARD` in the preset. EVK builds are DFU-only; `hpm6300evk` / `hpm6750evk*` use the older bxCAN IP and are rejected at configure time.
 
 ---
 
@@ -231,10 +246,11 @@ Four things do not map over 1:1 and cost most of the debugging time:
 ```
 candleLight_fw_hpm_port/
 ├── CMakeLists.txt              # Build script (HPM SDK + CherryUSB)
-├── CMakePresets.json           # Per-board presets (flash_dfu + flash_uf2)
+├── CMakePresets.json           # Per-board presets (DFU for hpm_sdk EVKs, DFU+UF2 for HSCanT)
 ├── boards/
 │   ├── hscant/                 # Board package (clock, pinmux, CAN clock, LED)
-│   └── hscant-lite/            # Board package (GPIO channel LEDs)
+│   ├── hscant-lite/            # Board package (GPIO channel LEDs)
+│   └── hpmicro_evk/            # Bindings for EVKs taken from $HPM_SDK_BASE/boards
 ├── port/                       # Platform seam: no hardware code
 │   ├── hal_include.h           # STM32-style HAL shim
 │   ├── cmsis_device.h          # RISC-V CMSIS shim
@@ -320,6 +336,16 @@ different build of this application:
 | --- | --- | --- |
 | `hscant-dfu` (`HPM_BUILD_TYPE=flash_dfu`) | `.dfu_signature` (`0x48504D21`) | the bootloader built from [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) |
 | `hscant-uf2` (`HPM_BUILD_TYPE=flash_uf2`) | `.uf2_signature` (`0x0A4D5048`) | the **original, closed-source** boot of the HSCanT device (UF2/MSC) |
+
+**UF2 is shipped for HSCanT only.** The `flash_uf2` image exists to stay
+compatible with HSCanT's **original closed-source UF2/MSC boot**; it is the only
+board for which this project provides UF2 presets. Other boards — HSCanT-Lite
+and the hpm_sdk EVKs — use DFU only in this repository. The UF2 image format
+itself is not HSCanT-specific, so UF2 support is theoretically possible on the
+other boards as well, but it needs a matching UF2 boot project; the user has to
+write that boot separately, following the hpm_sdk USB/MSC/bootloader samples,
+and keep the shared-memory contract (application base, `BOARD_UF2_SIGNATURE`,
+UF2 family, `bl_setting`) in sync with this application.
 
 **Why this is possible at all.** The HSCanT boot is a derivative of CherryDAP's
 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader).

@@ -1,7 +1,8 @@
 # HSCanT-Lite Pin Assignment
 
 HPM5321 / HPM5361, QFN48. This table is the reference for the shared
-`boards/hscant-lite` package used by candleLight, hpm_dfu_boot and
+`boards/hscant-lite` package used by candleLight,
+[`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) and
 hpm_hello_world.
 
 > The original `hscant-lite.hpmpc` was removed because it no longer passes the
@@ -79,7 +80,7 @@ Wiring:
   white/red:
   LED1 -> LED0 -> LED3 -> LED2 -> LED5 -> LED4 -> LED7 -> LED6.
 
-**hpm_dfu_boot**
+**[hpm_dfu_boot](https://github.com/zhangjiance/hpm_dfu_boot.git)**
 
 - No blinking. The generic boot LED hooks only set the initial and deinit
   state; they are not polled.

@@ -43,8 +43,8 @@ jobs:
       fail-fast: false
       matrix:
         # one leg per board/image; debug presets are deliberately not built here
-        # hscant-lite is DFU-only (there is no UF2 preset for it)
-        preset: [hscant-dfu, hscant-uf2, hscant-lite-dfu]
+        # hscant-lite and the hpm_sdk EVK boards are DFU-only (no UF2 presets)
+        preset: [hscant-dfu, hscant-uf2, hscant-lite-dfu, hpm5300evk-dfu]
     steps:
       - name: Check out (with the candleLight_fw submodule)
         uses: actions/checkout@v4

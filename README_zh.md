@@ -10,10 +10,23 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 ## 硬件
 
+### HSCanT / HSCanT-Lite
+
 | HSCanT | HSCanT-Lite |
 | :---: | :---: |
-| [![HSCanT 带外壳](docs/images/hscant-1.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-1.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
-| [![HSCanT 裸板](docs/images/hscant-2.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite-2.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+| [![HSCanT](docs/images/hscant.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+
+### hpm_sdk EVK 开发板
+
+这些 EVK 直接使用 hpm_sdk 自带的板级包，适配为单通道 candle 设备（仅 DFU）：
+
+| HPM5100EVK | HPM5300EVK | HPM5E00EVK | HPM6200EVK |
+| :---: | :---: | :---: | :---: |
+| ![HPM5100EVK](docs/images/hpm5100evk.jpg) | ![HPM5300EVK](docs/images/hpm5300evk.png) | ![HPM5E00EVK](docs/images/hpm5e00evk.jpg) | ![HPM6200EVK](docs/images/hpm6200evk.jpg) |
+
+| HPM6800EVK | HPM6E00EVK | HPM6P00EVK |
+| :---: | :---: | :---: |
+| ![HPM6800EVK](docs/images/hpm6800evk.png) | ![HPM6E00EVK](docs/images/hpm6e00evk.jpg) | ![HPM6P00EVK](docs/images/hpm6p00evk.jpg) |
 
 ## 设备标识
 
@@ -24,8 +37,8 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | 接口 0 | `gs_usb`，厂商自定义类 `0xFF/0xFF/0xFF`，2 个批量端点 |
 | 接口 1 | DFU runtime `0xFE/0x01/0x01`（仅 detach，无端点） |
 | Windows 驱动 | **无需驱动** —— MS OS 1.0 / WCID 使 Windows 自动绑定 `winusb.sys` |
-| CAN | 4 路 MCAN（兼容 Bosch M_CAN），支持 CAN-FD，CAN 时钟 80 MHz |
-| Flash 布局 | `hpm_dfu_boot` 位于 `0x80000000`，本 APP 位于 `0x80020000` |
+| CAN | 4 路 MCAN（兼容 Bosch M_CAN），支持 CAN-FD，CAN 时钟 80 MHz（HSCanT/HSCanT-Lite）；hpm_sdk EVK 构建为 1 路 MCAN |
+| Flash 布局 | [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 位于 `0x80000000`，本 APP 位于 `0x80020000` |
 
 ## 实现状态
 
@@ -33,7 +46,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 | 功能 | 状态 |
 | --- | --- |
-| 与 `hpm_dfu_boot` 配合的 DFU 烧录 | **已在硬件上验证** |
+| 与 [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 配合的 DFU 烧录 | **已在硬件上验证** |
 | USB 枚举（高速，Windows 下 WCID 免驱） | **已在硬件上验证** |
 | CAN / CAN-FD 帧转发 | **已在硬件上验证** —— 经典帧与 CAN-FD BRS、双向，既对过 PEAK PCAN，也做过通道互连 |
 | 多通道（4 路 MCAN） | **已在硬件上验证** —— 四路全测，含三节点共总线 |
@@ -150,7 +163,9 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 
 ### 第 4 层 —— `boards/<BOARD>/`
 
-板级包：时钟树、引脚复用、CAN 时钟选择、LED、DFU 签名，以及 DFU 复位请求所用的保留寄存器。目前有两个包：`hscant`（WS2812 指示灯）与 `hscant-lite`（每通道状态灯 + 收发灯的 GPIO 指示灯，PA03 BOOT 按键）。
+板级包：时钟树、引脚复用、CAN 时钟选择、LED、DFU 签名，以及 DFU 复位请求所用的保留寄存器。本仓库内有两个包：`hscant`（WS2812 指示灯）与 `hscant-lite`（每通道状态灯 + 收发灯的 GPIO 指示灯，PA03 BOOT 按键）。
+
+**hpm_sdk 中的 EVK 不复制进本仓库。** `BOARD=<evk>` 直接选中 `$HPM_SDK_BASE/boards/<evk>` 的板级包，再由 `boards/hpmicro_evk/hpmicro_evk.h` 映射到 candle 契约（`BOARD_APP_CAN_BASE` 对应的单路 MCAN、USB0、用户 LED）。应用统一以 `BOARD_hpmicro_evk` 编译，因此凡是带 MCAN + USB 的 SDK EVK，只需在 preset 里改 `BOARD` 即可。EVK 构建只使用 DFU；`hpm6300evk` / `hpm6750evk*` 使用的是老的 bxCAN IP，配置阶段会直接拒绝。
 
 ---
 
@@ -223,10 +238,11 @@ HPM 的 MCAN 就是 Bosch M_CAN，因此 `candleLight_fw/src/can/m_can.c` 几乎
 ```
 candleLight_fw_hpm_port/
 ├── CMakeLists.txt              # 工程构建脚本（HPM SDK + CherryUSB）
-├── CMakePresets.json           # 各板预设（flash_dfu + flash_uf2）
+├── CMakePresets.json           # 各板预设（EVK 仅 DFU，HSCanT 还有 UF2）
 ├── boards/
 │   ├── hscant/                 # 板级包（时钟、引脚复用、CAN 时钟、LED）
-│   └── hscant-lite/            # 板级包（GPIO 通道指示灯）
+│   ├── hscant-lite/            # 板级包（GPIO 通道指示灯）
+│   └── hpmicro_evk/            # 取自 $HPM_SDK_BASE/boards 的 EVK 绑定头文件
 ├── port/                       # 平台接缝：不含硬件代码
 │   ├── hal_include.h           # STM32 风格 HAL 垫片
 │   ├── cmsis_device.h          # RISC-V CMSIS 垫片
@@ -304,6 +320,8 @@ HSCanT 硬件存在两种可能的引导程序，各自搭配本工程不同的�
 | --- | --- | --- |
 | `hscant-dfu`（`HPM_BUILD_TYPE=flash_dfu`） | `.dfu_signature`（`0x48504D21`） | 由 [`zhangjiance/hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 编译出的 bootloader |
 | `hscant-uf2`（`HPM_BUILD_TYPE=flash_uf2`） | `.uf2_signature`（`0x0A4D5048`） | HSCanT 设备**原版闭源 boot**（UF2/MSC） |
+
+**仅 HSCanT 提供 UF2。** `flash_uf2` 镜像是为了兼容 HSCanT 的**原版闭源 UF2/MSC boot** 而存在的，因此本工程只为这块板提供 UF2 预设。其它板卡 —— HSCanT-Lite 与 hpm_sdk EVK —— 在本仓库中只使用 DFU。UF2 镜像格式本身并不绑定 HSCanT，所以其它板卡**理论上也可以支持 UF2**，但需要配套的 UF2 boot 工程；用户需要参考 hpm_sdk 的 USB/MSC/bootloader 示例自行编写该 boot，并与本 APP 约定好共享内存契约（APP 基址、`BOARD_UF2_SIGNATURE`、UF2 family、`bl_setting` 等）。
 
 **为什么可以做到。** HSCanT 的 boot 修改自 CherryDAP 的
 [HSLink-Pro bootloader](https://github.com/cherry-embedded/CherryDAP/tree/master/projects/HSLink-Pro/bootloader)。

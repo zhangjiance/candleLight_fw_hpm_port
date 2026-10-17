@@ -19,6 +19,11 @@
 #                     candleLight_fw/include/config.h ('-' in <name> becomes '_'
 #                     in that macro, e.g. hscant-lite -> BOARD_hscant_lite).
 #
+#   hpm_sdk EVKs are used straight from ${HPM_SDK_BASE}/boards: -DBOARD=<evk>
+#   (hpm5300evk, hpm6800evk, ...) selects the SDK board package and compiles
+#   candleLight as BOARD_hpmicro_evk (single MCAN channel + USB0).  See
+#   boards/hpmicro_evk/hpmicro_evk.h.  EVKs are DFU-only in this project.
+#
 # Two bootloader flavours are supported, selected by HPM_BUILD_TYPE:
 #
 #   flash_dfu  (.dfu_signature) - APP started by hpm_dfu_boot at 0x80000000.
@@ -29,6 +34,11 @@
 #               bootloader (the original, closed-source boot).
 #               Also emits <APP_NAME>.uf2 for drag-and-drop flashing:
 #                 cmake --preset hscant-uf2 && cmake --build --preset hscant-uf2
+#               Only HSCanT has UF2 presets: that image is kept compatible with
+#               HSCanT's closed-source boot.  Other boards could use flash_uf2
+#               in principle, but first need their own UF2 boot project (write
+#               it from the hpm_sdk USB/MSC/bootloader samples) and a matching
+#               shared-memory contract; until then they are DFU-only.
 #
 # Both link at 0x80020000 behind a 4 byte signature.
 
@@ -56,6 +66,16 @@ if(NOT DEFINED BOARD)
     message(FATAL_ERROR "BOARD is not set. Use: cmake --preset <preset>")
 endif()
 
+# BOARD_hpmicro_evk is the candle selector macro, not an hpm_sdk board name.
+# The SDK board (hpm5300evk, hpm6800evk, ...) has to be passed as BOARD so that
+# hpm-sdk can find its YAML, package and SoC.
+if(BOARD STREQUAL "hpmicro_evk")
+    message(FATAL_ERROR
+        "BOARD_hpmicro_evk is the candle selector, not a board name. Set BOARD to "
+        "the hpm_sdk EVK (e.g. -DBOARD=hpm5300evk); the build then defines "
+        "BOARD_hpmicro_evk automatically.")
+endif()
+
 # Custom board search path (boards/<BOARD>)
 if(NOT DEFINED BOARD_SEARCH_PATH AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/boards)
     set(BOARD_SEARCH_PATH ${CMAKE_CURRENT_SOURCE_DIR}/boards)
@@ -64,8 +84,55 @@ endif()
 find_package(hpm-sdk REQUIRED HINTS $ENV{HPM_SDK_BASE})
 project(candle_usb2canfd)
 
+# ---------------------------------------------------------------------------
+# Board package resolution
+#
+#   boards/<BOARD>/  - a board package that lives in this repository
+#                      (hscant, hscant-lite): keep using it.
+#
+#   otherwise BOARD must name an EVK in ${HPM_SDK_BASE}/boards.  The SDK owns
+#   that board package; this project only adds the candle bindings through
+#   boards/hpmicro_evk/hpmicro_evk.h and compiles candleLight as
+#   BOARD_hpmicro_evk.  Every SDK EVK whose CAN controller is an MCAN and
+#   which has an on-chip USB device port works this way - switch boards by
+#   changing BOARD (or picking another EVK preset), nothing else.
+# ---------------------------------------------------------------------------
+set(HPMICRO_EVK OFF)
+set(HPMICRO_EVK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/boards/hpmicro_evk)
+set(CANDLE_BOARD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD})
+
+if(EXISTS ${CANDLE_BOARD_DIR}/${BOARD}.yaml)
+    message(STATUS "Board package: ${BOARD} (in this repository)")
+else()
+    set(SDK_EVK_DIR $ENV{HPM_SDK_BASE}/boards/${BOARD})
+    if(NOT EXISTS ${SDK_EVK_DIR}/${BOARD}.yaml)
+        message(FATAL_ERROR
+            "No board named '${BOARD}': neither boards/${BOARD}/ in this repository "
+            "nor ${SDK_EVK_DIR} in hpm_sdk")
+    endif()
+
+    file(READ ${SDK_EVK_DIR}/board.h SDK_BOARD_H)
+    if(NOT SDK_BOARD_H MATCHES "BOARD_APP_CAN_BASE[ \t]+HPM_MCAN")
+        message(FATAL_ERROR
+            "BOARD=${BOARD} is not supported: the SDK board package does not expose "
+            "an MCAN controller (BOARD_APP_CAN_BASE HPM_MCAN...). EVKs with a bxCAN "
+            "controller or without CAN cannot be used as candle devices.")
+    endif()
+    if(NOT SDK_BOARD_H MATCHES "board_init_usb")
+        message(FATAL_ERROR
+            "BOARD=${BOARD} is not supported: the SDK board package has no "
+            "board_init_usb() / on-chip USB device port")
+    endif()
+
+    set(HPMICRO_EVK ON)
+    set(CANDLE_BOARD_DIR ${HPMICRO_EVK_DIR})
+    message(STATUS "Board package: ${BOARD} (hpm_sdk EVK, candle bindings in boards/hpmicro_evk)")
+endif()
+
 sdk_ld_options("--specs=nano.specs")
-sdk_linker_global_symbols("_flash_size=1M" "_noncacheable_size=256K")
+# _flash_size / _noncacheable_size come from the board YAML and the SoC's
+# CMakeLists in hpm_sdk.  Forcing them here breaks EVKs whose AXI SRAM is
+# smaller than the old HPM5321/HPM5361 value (HPM5E00EVK: 256 KiB total).
 
 set(CANDLE_FW ${CMAKE_CURRENT_SOURCE_DIR}/candleLight_fw)
 
@@ -138,7 +205,7 @@ endforeach()
 sdk_inc(${CMAKE_CURRENT_SOURCE_DIR}/port)
 sdk_inc(${CMAKE_CURRENT_SOURCE_DIR}/src)
 sdk_inc(${CMAKE_CURRENT_BINARY_DIR})
-sdk_inc(${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD})
+sdk_inc(${CANDLE_BOARD_DIR})
 sdk_inc(${CANDLE_INC})
 # usbd_conf.h (STM32 USB Device Library configuration, provided verbatim)
 sdk_inc(${CANDLE_FW}/libs/STM32_USB_Device_Library/config)
@@ -150,9 +217,20 @@ sdk_inc(${CANDLE_FW}/libs/STM32_USB_Device_Library/config)
 # The board selector macro is read by candleLight_fw/include/config.h, a
 # submodule that owns the board table, and has to be a valid C identifier - so a
 # '-' in the board name becomes '_': -DBOARD=hscant-lite selects the
-# BOARD_hscant_lite block (which that file still has to gain).
-string(REPLACE "-" "_" BOARD_MACRO "${BOARD}")
-sdk_compile_definitions(-DBOARD_${BOARD_MACRO} -DSTM32G4)
+# BOARD_hscant_lite block.
+#
+# Every hpm_sdk EVK shares one candle board block, BOARD_hpmicro_evk: BOARD is
+# the SDK board name (used to pick the board package and its YAML), while the
+# application is always built as an HPMicro EVK.
+if(HPMICRO_EVK)
+    sdk_compile_definitions(-DBOARD_hpmicro_evk -DSTM32G4)
+    # board.h (the SDK EVK's) + the candle bindings, before anything else.
+    target_compile_options(app PRIVATE
+        "-include" "${HPMICRO_EVK_DIR}/hpmicro_evk.h")
+else()
+    string(REPLACE "-" "_" BOARD_MACRO "${BOARD}")
+    sdk_compile_definitions(-DBOARD_${BOARD_MACRO} -DSTM32G4)
+endif()
 
 # ---------------------------------------------------------------------------
 # Sources

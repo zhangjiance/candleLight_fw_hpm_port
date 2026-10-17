@@ -385,7 +385,72 @@ void status_led_tick(void)
 }
 
 /* ---------------------------------------------------------------------------
- * Backend 3: no LEDs at all
+ * Backend 3: one plain GPIO "running" LED, no channel LEDs
+ *
+ * This is what the hpm_sdk EVKs use: the board package owns the pad and its
+ * polarity, the application just toggles it as a 1 Hz heartbeat.  Channel
+ * state and error events have no LED to go to.
+ * ------------------------------------------------------------------------- */
+#elif defined(BOARD_HAS_SYS_LED) && BOARD_HAS_SYS_LED
+
+#define SYS_LED_TOGGLE_MS  (500U) /* half period: 1 Hz, 50 % duty */
+#define SYS_LED_BOOT_STEPS (4U)
+
+static uint32_t s_last_sys_led_ms;
+static bool s_ready;
+
+void status_led_init(void)
+{
+    board_init_led_pins();
+    board_led_write(BOARD_LED_OFF_LEVEL);
+    s_last_sys_led_ms = HAL_GetTick();
+    s_ready = true;
+}
+
+void status_led_boot_anim(void)
+{
+    /* Short blink at power-on so the LED is known to work. */
+    for (uint8_t step = 0U; step < SYS_LED_BOOT_STEPS; step++) {
+        board_led_toggle();
+        board_delay_ms(30U);
+    }
+    board_led_write(BOARD_LED_OFF_LEVEL);
+}
+
+void status_led_channel(uint8_t channel, bool enabled)
+{
+    (void)channel;
+    (void)enabled;
+}
+
+void status_led_activity(uint8_t channel, bool rx)
+{
+    (void)channel;
+    (void)rx;
+}
+
+void status_led_error(uint8_t channel, bool active)
+{
+    (void)channel;
+    (void)active;
+}
+
+void status_led_tick(void)
+{
+    const uint32_t now = HAL_GetTick();
+
+    if (!s_ready) {
+        return;
+    }
+
+    if ((uint32_t)(now - s_last_sys_led_ms) >= SYS_LED_TOGGLE_MS) {
+        s_last_sys_led_ms = now;
+        board_led_toggle();
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * Backend 4: no LEDs at all
  * ------------------------------------------------------------------------- */
 #else
 
