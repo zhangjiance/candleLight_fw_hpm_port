@@ -1,8 +1,8 @@
 # candleLight_fw_hpm_port
 
-基于 **HPMicro HPM5321/HPM5361 RISC-V MCU** 的 **candleLight / gs_usb 兼容 USB ⇄ CAN-FD 固件**，构建在 HPM SDK 与 CherryUSB 之上。
+**面向 HPMicro MCAN 设备的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 固件**，覆盖 HSCanT、HSCanT-Lite 以及带 MCAN 的 hpm_sdk EVK，构建在 HPM SDK 与 CherryUSB 之上。
 
-gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎**，全部使用 candleLight 的**原始源码**；只有平台层是新写的。因此主机端用 Linux 自带的 `gs_usb` 驱动（或 `candle_usb` / `candump` / `can-utils`）看到的就是一个普通的 candleLight / CANable 设备。
+gs_usb 协议与 candleLight 帧链表引擎来自上游 candleLight 源码；本仓库提供 HPMicro 平台层，并跟随上游 `multichannel` 分支。因此主机端用 Linux 自带的 `gs_usb` 驱动看到的就是一个普通的 candleLight / CANable 设备。
 
 > English overview: [README.md](./README.md). 编译指导： [README_build.md](./README_build.md)（英文）/ [README_build_zh.md](./README_build_zh.md)（中文）。
 
@@ -52,11 +52,11 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | 多通道（4 路 MCAN） | **已在硬件上验证** —— 四路全测，含三节点共总线 |
 | 位定时 / 采样点 | **已验证** —— 主机协商的采样点确实落进 `NBTP`/`DBTP`（500k/2M 与 1M/4M @80% 均核对过） |
 | 四通道终端电阻开关 | **已在硬件上验证** —— `GS_CAN_FEATURE_TERMINATION`，用 `ip link set canX type can termination 120` 控制 |
-| 总线错误上报（`CAN_ERR_ACK` / `PROT` / `CRTL` / `BUSOFF` / `RESTARTED`，TEC/REC，RX 溢出 `GS_CAN_FLAG_OVERFLOW`） | 已实现；ACK/PROT/CRTL/BUSOFF 在故意做坏的总线上实际触发过；`RESTARTED` 与 RX 溢出标志补齐后**尚未上板验证**，系统化回归也还没做 |
-| WS2812 收发指示灯驱动 | **未实现** |
+| CAN 错误 / bus-off / TDC（上游 `multichannel`） | 已实现；M_CAN 错误、状态、bus-off 恢复与 TDC 路径可在所有板卡上编译，但仍需上板回归 |
+| HSCanT WS2812 启动灯效 | **已在硬件上验证** —— 动画结束后灯带清空，通道指示灯保持熄灭 |
 | 吞吐 / 压力测试 | 未做 |
 
-命令面（`BITTIMING`、`DATA_BITTIMING`、`MODE`、`BT_CONST(_EXT)`、`DEVICE_CONFIG`、`TIMESTAMP`、`IDENTIFY`、`HOST_FORMAT`、TX 回声、时间戳，以及 `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`）是完整的，且枚举、DFU、帧转发与终端电阻控制都已端到端跑过。
+命令面（`BITTIMING`、`DATA_BITTIMING`、`MODE`、`BT_CONST(_EXT)`、`DEVICE_CONFIG`、`TIMESTAMP`、`IDENTIFY`、`HOST_FORMAT`、TX 回声、时间戳，以及 `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`，再加上 `GET_STATE` / `BERR` / `TDC` / `BUS_OFF_RECOVERY`）是完整的，且枚举、DFU、帧转发与终端电阻控制都已端到端跑过。
 
 ### 已知缺口 / 待办
 
@@ -64,36 +64,39 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | --- | --- |
 | 错误上报回归 | 逐类系统性验证：`CAN_ERR_ACK`、`PROT`（stuff / form / bit / CRC）、`CRTL`（warning、passive）、`BUSOFF`、`RESTARTED`（bus-off 恢复）、RX overrun（`GS_CAN_FLAG_OVERFLOW`），以及 payload 里的 TEC/REC |
 | 性能测试 | USB 高速下的帧速率、多通道同时打流、`RX dropped/missed`、TX 延迟。USB 已经是高速，所以瓶颈在 CAN 波特率与每帧的主机侧开销，而不是链路 |
-| 通道指示灯 | HSCanT：8 颗 WS2812（SPI1 + DMA），CAN0..3 各一对 TX/RX；HSCanT-Lite：8 颗 GPIO LED，每通道一颗白色状态灯（启动后常亮，收发时闪烁）+ 一颗红色错误灯（故障时闪烁，正常熄灭） |
+| 上板验证 | 在所有板卡上验证 CAN 错误、bus-off 恢复和 TDC |
 
 ### 向主机上报的特性位
 
-```37:46:src/can_hpm.c
+```c
         GS_CAN_FEATURE_LISTEN_ONLY |
         GS_CAN_FEATURE_LOOP_BACK |
         GS_CAN_FEATURE_HW_TIMESTAMP |
         GS_CAN_FEATURE_IDENTIFY |
         GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE |
         (IS_ENABLED(CONFIG_CANFD) ?
-         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT : 0)
-#ifdef TERM_Pin
-        | GS_CAN_FEATURE_TERMINATION
-#endif
+         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT |
+         GS_CAN_FEATURE_TDC : 0) |
+        (IS_ENABLED(CONFIG_TERMINATION) ?
+         GS_CAN_FEATURE_TERMINATION : 0) |
+        GS_CAN_FEATURE_BERR_REPORTING |
+        GS_CAN_FEATURE_GET_STATE |
+        GS_CAN_FEATURE_BUS_OFF_RECOVERY
 ```
 
-`GS_CAN_FEATURE_TERMINATION` 对 `BOARD_hscant` **是会上报的**：那里定义了 `TERM_Pin`，从而选用 `set_term()` / `get_term()`（本移植没有编译上游的 `src/gpio.c`，所以这两个钩子实现在 `src/port_board.c`），并经 `config.termination_set` 走到板级的 `board_can_set_termination()`（每通道一个 `CANx_RES`）。主机用法：`ip link set canX type can termination 120`（或 `termination 0`），且只能在接口 down 时修改。复位后终端电阻是断开的，与 `pinmux.c` 给 `CANx_RES` 的电平一致。
+`GS_CAN_FEATURE_TERMINATION` 对 `BOARD_hscant` **是会上报的**：那里定义了 `CONFIG_TERMINATION`，从而选用 `set_term()` / `get_term()`（本移植没有编译上游的 `src/gpio.c`，所以这两个钩子实现在 `src/port_board.c`），并经 `config.termination_set` 走到板级的 `board_can_set_termination()`（每通道一个 `CANx_RES`）。主机用法：`ip link set canX type can termination 120`（或 `termination 0`），且只能在接口 down 时修改。复位后终端电阻是断开的，与 `pinmux.c` 给 `CANx_RES` 的电平一致。
 
 ---
 
 ## 架构
 
-设计目标很简单：**保持 candleLight 的应用逻辑逐字节不变，把所有平台依赖收敛到一条窄接缝上**，这样上游对帧引擎或协议的修改可以直接靠拷贝文件吸收。
+设计目标是让 candleLight 的应用逻辑保持在上游源码中，把所有平台依赖收敛到一条窄接缝上；上游更新时只需刷新少数带 include 接缝的文件。
 
 ```
                        ┌──────────────────────────────────────────┐
   candleLight_fw       │  src/candle/main.c        （副本，仅接缝）│
-  （git 子模块，        │  src/candle/usbd_gs_can.c （副本，仅接缝）│
-    参考实现）          │  src/can_common.c   （原样编译）         │
+  （上游 multichannel）│  src/candle/usbd_gs_can.c （副本，仅接缝）│
+                       │  src/candle/can_common.c  （副本，仅接缝）│
                        │  src/led.c, util.c, usbd_desc.c（原样）  │
                        └──────────────────┬───────────────────────┘
                                           │  STM32 HAL + STM32 USBD API
@@ -118,23 +121,16 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
                        └──────────────────────────────────────────┘
 ```
 
-### 第 1 层 —— `candleLight_fw/`（原始代码）
+### 第 1 层 —— `candleLight_fw/`（上游源码）
 
 | 文件 | 使用方式 |
 | --- | --- |
-| `src/can_common.c` | **原样编译** —— 帧链表池（`CAN_SendFrame` / `CAN_ReceiveFrame` / `CAN_HandleError`）、TX 回声、RX 队列 |
-| `src/led.c`、`src/util.c`、`src/usbd_desc.c` | **原样编译** |
-| `src/usbd_gs_can.c` | 复制到 `src/candle/`，**仅改动 `#include` 块** |
-| `src/main.c` | 复制到 `src/candle/`，**仅改动 `#include` 块** |
+| `src/can_common.c` | 复制到 `src/candle/`；只改 `board.h` → `board_layout.h` |
+| `src/led.c`、`src/util.c`、`src/usbd_desc.c` | 原样编译 |
+| `src/usbd_gs_can.c` | 复制到 `src/candle/`；改 include 接缝和 `sw_version` |
+| `src/main.c` | 复制到 `src/candle/`；改 include 接缝并加入状态灯钩子 |
 
-之所以要拷贝这两个文件，原因只有一个：它们会 include 本平台不存在的 STM32 USB Device Library 头文件。include 块以下的部分一字未改，因此与子模块 `diff` 永远只有五行。
-
-```42:45:src/candle/usbd_gs_can.c
- * are replaced by our CherryUSB-backed compatibility layer.  Everything else
- * in this file is an unmodified copy of candleLight_fw/src/usbd_gs_can.c.
- */
-#include "usbd_compat.h"
-```
+之所以需要副本，是因为这些文件会 include 本平台不存在的 STM32 USB Device Library 头文件。它们与子模块的差异仅限于 include 块和少量 HPMicro 钩子。
 
 ### 第 2 层 —— `port/`（平台接缝）
 
@@ -144,7 +140,7 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 - **`cmsis_device.h`** —— 原代码用到的少数 CMSIS 内建函数在 RISC-V 上的等价物：`__disable_irq`、`__enable_irq`、`__DMB`、`__BKPT`、`NVIC_SystemReset`。
 - **`usbd_compat.h`** —— 取自 `usbd_def.h` 的 STM32 USB Device Library **类型、常量与原型**（`USBD_HandleTypeDef`、`USBD_ClassTypeDef`、整套 `USBD_LL_*` / `USBD_Ctl*`、描述符索引宏）。
 - **`usbd_def.h`、`usbd_ctlreq.h`** —— 极薄的替身，让原代码的 `#include` 能解析。
-- **`board_layout.h`** —— candleLight 的板抽象（`struct BoardConfig`、`config.channels[]`），改名以腾出 `board.h` 这个名字。
+- **`board_layout.h`** —— candleLight 的板抽象（`struct board_config`、`config.channel[]`），改名以腾出 `board.h` 这个名字。
 - **`board_contract.h`** —— 每个板包必须提供什么，用 `#error` 在编译期强制检查。
 - **`usbd_bridge.h`** —— 固件其余部分唯一需要从桥接层获取的符号。
 
@@ -153,13 +149,14 @@ gs_usb 协议、USB 描述符，以及**最关键的 candleLight 帧链表引擎
 | 文件 | 作用 |
 | --- | --- |
 | `usbd_bridge.c` | **兼容层** —— 详见下文 |
-| `can_hpm.c` | `candleLight_fw/src/can/m_can.c` 到 `hpm_mcan_drv` 的移植 |
+| `can_hpm.c` | 基于 `hpm_mcan_drv` 的 M_CAN 驱动：`can_drv_*`、错误/bus-off/TDC |
 | `timer.c` | `timer_get()` = 基于 `mcycle` 的自由运行微秒计数器（不占用外设定时器，可在中断中安全读取） |
 | `dfu_hpm.c` | `dfu_run_bootloader()` —— 写入 BGPR/PDGO magic 后重新进入 ROM 引导流程 |
 | `port_device.c` | `HAL_Init()` 底层初始化（时钟树、USB PHY、D-Cache 策略）、GPIO 垫片、芯片 UUID 装载 |
-| `port_board.c` | 弱符号默认 `board_init_can_clock()`，填充 `config.channels[].interface` |
+| `port_board.c` | `board_setup()`、填充 `config.channel[]`、终端电阻钩子 |
+| `status_led.c`、`ws2812.c` | 启动动画与状态灯 |
 | `usb_config.h` | CherryUSB 配置 |
-| `candle/` | 上面那两个改造过的原始文件 |
+| `candle/` | 三个改造过的原始文件 |
 
 ### 第 4 层 —— `boards/<BOARD>/`
 
@@ -212,7 +209,7 @@ candleLight 的 `include/board.h`（抽象板接口）与 `boards/<BOARD>/board.
 
 ### 5. CAN：`m_can.c` → `can_hpm.c`
 
-HPM 的 MCAN 就是 Bosch M_CAN，因此 `candleLight_fw/src/can/m_can.c` 几乎可以 1:1 映射 —— 相同的位定时约束、相同的 `gs_host_frame` 映射、相同的 PSR/ECR/CCCR 错误状态处理。只有 STM32 HAL 调用被替换：
+HPM 的 MCAN 就是 Bosch M_CAN，位定时约束、`gs_host_frame` 映射和 PSR/ECR/CCCR 状态处理仍然对应。上游现在通过 `can_drv_*` 抽象驱动；`can_hpm.c` 在 HPM MCAN 上实现这些接口：enable/disable、寄存器快照、总线错误、状态、TDC 和 bus-off 恢复。STM32 HAL 调用映射如下：
 
 | STM32 FDCAN | HPM MCAN |
 | --- | --- |
@@ -222,11 +219,11 @@ HPM 的 MCAN 就是 Bosch M_CAN，因此 `candleLight_fw/src/can/m_can.c` 几乎
 | `HAL_FDCAN_GetRxMessage` | `mcan_read_rxfifo()` |
 | `HAL_FDCAN_GetRxFifoFillLevel` | `RXF0S.F0FL` |
 
-所有排队与链表逻辑仍然发生在未修改的 `can_common.c` 与 `src/candle/usbd_gs_can.c`（副本）中。
+所有排队与链表逻辑仍然发生在 `can_common.c` 与 `src/candle/usbd_gs_can.c` 中；两者都是子模块副本，只修改了 include 接缝。
 
-有四处不能 1:1 对应，也最耗调试时间：
+下面几点不能 1:1 对应，也最耗调试时间：
 
-- **消息 RAM** —— 当 `MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1`（HPM5321/HPM5361）时它只是 AHB SRAM 的一块，应用必须在第一次 `mcan_init()` 之前用 `mcan_set_msg_buf_attr()` 登记；否则 `mcan_get_ram_size()` 返回 0，`mcan_init()` 在清 `CCCR.INIT` **之前**就失败，四路在主机侧都能起来，却既不发、不收，也不报错。
+- **消息 RAM** —— 当 `MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1` 时它只是 AHB SRAM 的一块，应用必须在第一次 `mcan_init()` 之前用 `mcan_set_msg_buf_attr()` 登记；否则 `mcan_get_ram_size()` 返回 0，`mcan_init()` 在清 `CCCR.INIT` **之前**就失败，各路在主机侧都能起来，却既不发、不收，也不报错。
 - **发送** —— `TXFQS.TFQPI` 是整个 TX 缓冲数组的下标（先是专用缓冲，再是 FIFO 槽），所以必须走 TX FIFO 接口；传给只接受 `TXBC.NDTB` 以内下标的 `mcan_write_txbuf()` 会让每一帧都被丢弃。八个缓冲在这里全部配成同一个队列。
 - **CAN 时钟** —— 必须等于上报给主机的 `CAN_CLOCK_SPEED`（本板 80 MHz），因为主机据此推算预分频；否则两路之间仍然彼此一致（内部 loopback 也能通过），但谁都不符合主机认定的波特率。
 - **位定时兜底值** —— `can_init()` 里那组硬编码只在主机从未下发 `GS_USB_BREQ_BITTIMING` 时使用，已按本板 80 MHz 写成 500k / 2M @80%。
@@ -253,17 +250,19 @@ candleLight_fw_hpm_port/
 │   ├── board_contract.h        # 板包契约 + 编译期检查
 │   └── usbd_bridge.h           # 面向桥接层的 API
 ├── src/
-│   ├── candle/                 # candleLight 原始文件（仅 include 接缝）
+│   ├── candle/                 # 带 include 接缝的上游文件
 │   │   ├── main.c
-│   │   └── usbd_gs_can.c
+│   │   ├── usbd_gs_can.c
+│   │   └── can_common.c
 │   ├── usbd_bridge.c           # 兼容层核心（CherryUSB ⇄ STM32 USBD）
 │   ├── can_hpm.c               # m_can.c 到 hpm_mcan_drv 的移植
 │   ├── timer.c                 # 基于 mcycle 的 timer_get()
 │   ├── dfu_hpm.c               # dfu_run_bootloader()
 │   ├── port_device.c           # HAL_Init()、GPIO 垫片、UUID 装载
-│   ├── port_board.c            # config.channels[] 装配、弱 CAN 时钟
+│   ├── port_board.c            # board_setup()、config.channel[]
+│   ├── status_led.c  ws2812.c  # 状态灯与启动动画
 │   └── usb_config.h            # CherryUSB 配置
-├── candleLight_fw/             # git 子模块（参考源码）
+├── candleLight_fw/             # 子模块：上游 multichannel + HPM 板级配置
 ├── README.md                   # 工程说明（英文）
 ├── README_zh.md                # 工程说明（中文，本文件）
 ├── README_build.md             # 编译指导（英文）

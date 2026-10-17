@@ -1,21 +1,24 @@
 
 #include <string.h>
 
-#include "board_layout.h" /* candleLight's board abstraction (config, ...) */
+#include "board_layout.h" /* board API */
 #include "can.h"
+#include "can_common.h"
+#include "can_drv.h"
 #include "hal_include.h"
 #include "timer.h"
 
-#include "board.h"          /* the board package (init_can_pins, ...) */
-#include "status_led.h"     /* per-channel state / traffic indication */
-#include "board_contract.h" /* declares board_init_can_clock() for every board */
+#include "board.h"          /* hardware board */
+#include "status_led.h"     /* status LEDs */
+#include "board_contract.h" /* board contract */
 #include "hpm_clock_drv.h"
 #include "hpm_mcan_drv.h"
 #include "hpm_mcan_regs.h"
 
-/* ------------------------------------------------------------------ */
-/* Bit timing constraints (verbatim from candleLight's m_can.c)        */
-/* ------------------------------------------------------------------ */
+#define M_CAN_PSR_ACT_SYNC      0U
+#define M_CAN_SYNC_BUS_TIMEOUT_MS 100U
+
+/* Bit timing / feature constraints. */
 const struct gs_device_bt_const CAN_btconst = {
     .feature =
         GS_CAN_FEATURE_LISTEN_ONLY |
@@ -24,50 +27,87 @@ const struct gs_device_bt_const CAN_btconst = {
         GS_CAN_FEATURE_IDENTIFY |
         GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE |
         (IS_ENABLED(CONFIG_CANFD) ?
-         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT : 0)
-#ifdef TERM_Pin
-        | GS_CAN_FEATURE_TERMINATION
-#endif
-    ,
+         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT : 0) |
+        (IS_ENABLED(CONFIG_TERMINATION) ?
+         GS_CAN_FEATURE_TERMINATION : 0) |
+        GS_CAN_FEATURE_BERR_REPORTING |
+        GS_CAN_FEATURE_GET_STATE |
+        (IS_ENABLED(CONFIG_CANFD) ?
+         GS_CAN_FEATURE_TDC : 0) |
+        GS_CAN_FEATURE_BUS_OFF_RECOVERY,
     .fclk_can = CAN_CLOCK_SPEED,
-    .tseg1_min = 1,
-    .tseg1_max = 256,
-    .tseg2_min = 1,
-    .tseg2_max = 128,
-    .sjw_max = 128,
-    .brp_min = 1,
-    .brp_max = 512,
-    .brp_inc = 1,
+    .btc = {
+        .tseg1_min = 1,
+        .tseg1_max = 256,
+        .tseg2_min = 1,
+        .tseg2_max = 128,
+        .sjw_max = 128,
+        .brp_min = 1,
+        .brp_max = 512,
+        .brp_inc = 1,
+    },
 };
 
 const struct gs_device_bt_const_extended CAN_btconst_ext = {
-    .device_bt_const = CAN_btconst,
+    .feature =
+        GS_CAN_FEATURE_LISTEN_ONLY |
+        GS_CAN_FEATURE_LOOP_BACK |
+        GS_CAN_FEATURE_HW_TIMESTAMP |
+        GS_CAN_FEATURE_IDENTIFY |
+        GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE |
+        (IS_ENABLED(CONFIG_CANFD) ?
+         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT : 0) |
+        (IS_ENABLED(CONFIG_TERMINATION) ?
+         GS_CAN_FEATURE_TERMINATION : 0) |
+        GS_CAN_FEATURE_BERR_REPORTING |
+        GS_CAN_FEATURE_GET_STATE |
+        (IS_ENABLED(CONFIG_CANFD) ?
+         GS_CAN_FEATURE_TDC : 0) |
+        GS_CAN_FEATURE_BUS_OFF_RECOVERY,
+    .fclk_can = CAN_CLOCK_SPEED,
+    .btc = {
+        .tseg1_min = 1,
+        .tseg1_max = 256,
+        .tseg2_min = 1,
+        .tseg2_max = 128,
+        .sjw_max = 128,
+        .brp_min = 1,
+        .brp_max = 512,
+        .brp_inc = 1,
+    },
+    .dbtc = {
+        .tseg1_min = 1,
+        .tseg1_max = 32,
+        .tseg2_min = 1,
+        .tseg2_max = 16,
+        .sjw_max = 16,
+        .brp_min = 1,
+        .brp_max = 32,
+        .brp_inc = 1,
+    },
+};
 
-    .dtseg1_min = 1,
-    .dtseg1_max = 32,
-    .dtseg2_min = 1,
-    .dtseg2_max = 16,
-    .dsjw_max = 16,
-    .dbrp_min = 1,
-    .dbrp_max = 32,
-    .dbrp_inc = 1,
+const struct gs_device_tdc_const CAN_tdc_const = {
+    .tdco_min = 0,
+    .tdco_max = 127,
+    .tdcf_min = 0,
+    .tdcf_max = 127,
+    .mode = GS_CAN_TDC_MODE_OFF | GS_CAN_TDC_MODE_AUTO,
 };
 
 static const uint8_t dlc_to_bytes[16] = {
     0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 12U, 16U, 20U, 24U, 32U, 48U, 64U
 };
 
-/* CAN clock and pad muxing are board specific; the board package owns both. */
+/* Board-owned CAN clock. */
 static uint32_t can_clk_freq(FDCAN_GlobalTypeDef *ptr)
 {
     return board_init_can_clock(ptr);
 }
 
-void can_init(can_data_t *channel, FDCAN_GlobalTypeDef *instance)
+void can_init(can_data_t *channel, const struct board_channel_config *config)
 {
-    memset(&channel->channel, 0, sizeof(channel->channel));
-
-    channel->channel.Instance = instance;
+    channel->channel.Instance = config->interface;
 
     channel->channel.Init.NominalPrescaler = 1U;
     channel->channel.Init.NominalSyncJumpWidth = 16U;
@@ -83,45 +123,55 @@ void can_init(can_data_t *channel, FDCAN_GlobalTypeDef *instance)
     channel->channel.State = HAL_FDCAN_STATE_RESET;
     channel->channel.configured = false;
 
-    channel->last_err = 0U;
-
-    /* Make sure the pad muxing and the CAN clock are ready (board provided). */
-    init_can_pins(instance);
-    (void)board_init_can_clock(instance);
+    /* Ensure pins and clock. */
+    init_can_pins(config->interface);
+    (void)board_init_can_clock(config->interface);
 }
 
-void can_set_bittiming(can_data_t *channel, const struct gs_device_bittiming *timing)
+static void can_apply_timing(can_data_t *channel, mcan_config_t *cfg)
 {
-    const uint8_t tseg1 = (uint8_t)(timing->prop_seg + timing->phase_seg1);
+    const struct gs_device_bittiming *bt = &channel->bittiming;
+    const struct gs_device_bittiming *dbt = &channel->data_bittiming;
 
-    channel->channel.Init.NominalSyncJumpWidth = (uint8_t)timing->sjw;
-    channel->channel.Init.NominalTimeSeg1 = tseg1;
-    channel->channel.Init.NominalTimeSeg2 = (uint8_t)timing->phase_seg2;
-    channel->channel.Init.NominalPrescaler = (uint16_t)timing->brp;
+    cfg->use_lowlevel_timing_setting = true;
+
+    cfg->can_timing.prescaler = bt->brp;
+    cfg->can_timing.num_seg1 = bt->prop_seg + bt->phase_seg1;
+    cfg->can_timing.num_seg2 = bt->phase_seg2;
+    cfg->can_timing.num_sjw = bt->sjw;
+    cfg->can_timing.enable_tdc = false;
+
+    cfg->canfd_timing.prescaler = dbt->brp;
+    cfg->canfd_timing.num_seg1 = dbt->prop_seg + dbt->phase_seg1;
+    cfg->canfd_timing.num_seg2 = dbt->phase_seg2;
+    cfg->canfd_timing.num_sjw = dbt->sjw;
+
+    if (channel->tdc.mode & GS_CAN_TDC_MODE_AUTO) {
+        cfg->enable_tdc = true;
+        cfg->tdc_config.ssp_offset = channel->tdc.tdco;
+        cfg->tdc_config.filter_window_length = channel->tdc.tdcf;
+        cfg->canfd_timing.enable_tdc = true;
+    } else {
+        cfg->enable_tdc = false;
+        cfg->tdc_config.ssp_offset = 0U;
+        cfg->tdc_config.filter_window_length = 0U;
+        cfg->canfd_timing.enable_tdc = false;
+    }
 }
 
-void can_set_data_bittiming(can_data_t *channel, const struct gs_device_bittiming *timing)
-{
-    const uint8_t tseg1 = (uint8_t)(timing->prop_seg + timing->phase_seg1);
-
-    channel->channel.Init.DataSyncJumpWidth = (uint8_t)timing->sjw;
-    channel->channel.Init.DataTimeSeg1 = tseg1;
-    channel->channel.Init.DataTimeSeg2 = (uint8_t)timing->phase_seg2;
-    channel->channel.Init.DataPrescaler = (uint16_t)timing->brp;
-}
-
-void can_enable(can_data_t *channel, uint32_t mode)
+void can_drv_enable(struct can_channel *channel)
 {
     FDCAN_GlobalTypeDef *base = channel->channel.Instance;
     mcan_config_t cfg;
     mcan_node_mode_t node_mode;
+    const uint32_t feature = channel->feature;
 
-    if ((mode & (GS_CAN_MODE_LISTEN_ONLY | GS_CAN_MODE_LOOP_BACK)) ==
-        (GS_CAN_MODE_LISTEN_ONLY | GS_CAN_MODE_LOOP_BACK)) {
+    if ((feature & (GS_CAN_FEATURE_LISTEN_ONLY | GS_CAN_FEATURE_LOOP_BACK)) ==
+        (GS_CAN_FEATURE_LISTEN_ONLY | GS_CAN_FEATURE_LOOP_BACK)) {
         node_mode = mcan_mode_loopback_internal;
-    } else if (mode & GS_CAN_MODE_LISTEN_ONLY) {
+    } else if (feature & GS_CAN_FEATURE_LISTEN_ONLY) {
         node_mode = mcan_mode_listen_only;
-    } else if (mode & GS_CAN_MODE_LOOP_BACK) {
+    } else if (feature & GS_CAN_FEATURE_LOOP_BACK) {
         node_mode = mcan_mode_loopback_external;
     } else {
         node_mode = mcan_mode_normal;
@@ -131,49 +181,25 @@ void can_enable(can_data_t *channel, uint32_t mode)
                                (node_mode == mcan_mode_listen_only)     ? FDCAN_MODE_BUS_MONITORING :
                                (node_mode == mcan_mode_loopback_external) ? FDCAN_MODE_EXTERNAL_LOOPBACK :
                                                                            FDCAN_MODE_NORMAL;
-
-    channel->channel.Init.AutoRetransmission = (mode & GS_CAN_MODE_ONE_SHOT) ? 0U : 1U;
-
-    if (mode & GS_CAN_MODE_FD) {
-        channel->channel.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
-    } else {
-        channel->channel.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
-    }
+    channel->channel.Init.AutoRetransmission = (feature & GS_CAN_FEATURE_ONE_SHOT) ? 0U : 1U;
+    channel->channel.Init.FrameFormat = (feature & GS_CAN_FEATURE_FD) ?
+                                        FDCAN_FRAME_FD_BRS : FDCAN_FRAME_CLASSIC;
 
     mcan_get_default_config(base, &cfg);
 
     cfg.enable_canfd = IS_ENABLED(CONFIG_CANFD);
     cfg.mode = node_mode;
     cfg.disable_auto_retransmission = (channel->channel.Init.AutoRetransmission == 0U);
-    /* TDC for the FD data phase, driver default SSP offset; needs a data prescaler <= 2. */
-    cfg.enable_tdc = true;
-    cfg.tdc_config.ssp_offset = 0U;          /* 0 = driver default (DTSEG1+1) */
-    cfg.tdc_config.filter_window_length = 0U;
 
-    /* Program exactly the prescaler/segment values the host asked for. */
-    cfg.use_lowlevel_timing_setting = true;
-    cfg.can_timing.prescaler = channel->channel.Init.NominalPrescaler;
-    cfg.can_timing.num_seg1 = channel->channel.Init.NominalTimeSeg1;
-    cfg.can_timing.num_seg2 = channel->channel.Init.NominalTimeSeg2;
-    cfg.can_timing.num_sjw = channel->channel.Init.NominalSyncJumpWidth;
-    /* TDC is a data-phase feature: nominal timing is validated without it. */
-    cfg.can_timing.enable_tdc = false;
+    can_apply_timing(channel, &cfg);
 
-    cfg.canfd_timing.prescaler = channel->channel.Init.DataPrescaler;
-    cfg.canfd_timing.num_seg1 = channel->channel.Init.DataTimeSeg1;
-    cfg.canfd_timing.num_seg2 = channel->channel.Init.DataTimeSeg2;
-    cfg.canfd_timing.num_sjw = channel->channel.Init.DataSyncJumpWidth;
-    /* Sets DBTP.TDC; mcan_init() re-applies the full TDC config afterwards. */
-    cfg.canfd_timing.enable_tdc = true;
-
-    /* No identifier filter list: every frame goes to RX FIFO0. */
+    /* Accept all frames into RX FIFO0. */
     mcan_get_default_ram_config(base, &cfg.ram_config, cfg.enable_canfd);
     cfg.ram_config.enable_std_filter = false;
     cfg.ram_config.std_filter_elem_count = 0U;
     cfg.ram_config.enable_ext_filter = false;
     cfg.ram_config.ext_filter_elem_count = 0U;
 
-    /* Keep the driver's default TX FIFO: can_send() uses the TXFQS handshake. */
     cfg.all_filters_config.std_id_filter_list.mcan_filter_elem_count = 0U;
     cfg.all_filters_config.ext_id_filter_list.mcan_filter_elem_count = 0U;
 
@@ -187,18 +213,16 @@ void can_enable(can_data_t *channel, uint32_t mode)
     if (mcan_init(base, &cfg, can_clk_freq(base)) == status_success) {
         channel->channel.State = HAL_FDCAN_STATE_BUSY;
         channel->channel.configured = true;
-        if (config.phy_power_set) {
-            config.phy_power_set(channel, true);
-        }
-        /* Both LEDs of a started channel stay lit until the host stops it. */
-        status_led_channel((uint8_t)channel->nr, true);
+        /* Channel LED on. */
+        status_led_channel((uint8_t)can_channel_get_nr(channel), true);
     } else {
         channel->channel.State = HAL_FDCAN_STATE_READY;
-        status_led_channel((uint8_t)channel->nr, false);
+        channel->channel.configured = false;
+        status_led_channel((uint8_t)can_channel_get_nr(channel), false);
     }
 }
 
-void can_disable(can_data_t *channel)
+void can_drv_disable(struct can_channel *channel)
 {
     FDCAN_GlobalTypeDef *base = channel->channel.Instance;
 
@@ -210,17 +234,9 @@ void can_disable(can_data_t *channel)
     }
 
     channel->channel.State = HAL_FDCAN_STATE_READY;
+    channel->channel.configured = false;
 
-    status_led_channel((uint8_t)channel->nr, false);
-
-    if (config.phy_power_set) {
-        config.phy_power_set(channel, false);
-    }
-}
-
-bool can_is_enabled(can_data_t *channel)
-{
-    return channel->channel.State == HAL_FDCAN_STATE_BUSY;
+    status_led_channel((uint8_t)can_channel_get_nr(channel), false);
 }
 
 bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
@@ -234,9 +250,9 @@ bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
         return false;
     }
 
-    status_led_activity((uint8_t)channel->nr, true);
+    status_led_activity((uint8_t)can_channel_get_nr(channel), true);
 
-    rx_frame->channel = channel->nr;
+    rx_frame->channel = can_channel_get_nr(channel);
     rx_frame->flags = 0U;
     rx_frame->can_id = rx.use_ext_id ? rx.ext_id : rx.std_id;
 
@@ -269,7 +285,7 @@ bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
         rx_frame->classic_can_ts->timestamp_us = timestamp_us;
     }
 
-    /* RX FIFO 0 overflow (IR.RF0L, sticky): report it on the frame draining the FIFO. */
+    /* Report RX FIFO overflow. */
     if (0U != (mcan_get_interrupt_flags(base) & MCAN_IR_RF0L_MASK)) {
         mcan_clear_interrupt_flags(base, MCAN_IR_RF0L_MASK);
         rx_frame->flags |= GS_CAN_FLAG_OVERFLOW;
@@ -318,157 +334,132 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
         return false;
     }
 
-    status_led_activity((uint8_t)channel->nr, false);
+    status_led_activity((uint8_t)can_channel_get_nr(channel), false);
 
     return true;
 }
 
-static void can_update_error_led(can_data_t *channel, uint32_t err)
+void can_drv_read_reg_status(struct can_channel *channel)
 {
-    const uint8_t lec = (uint8_t)MCAN_PSR_LEC_GET(err);
-    const bool active =
-        ((err & (MCAN_PSR_BO_MASK | MCAN_PSR_EP_MASK | MCAN_PSR_EW_MASK)) != 0U) ||
-        ((lec != 0x0U) && (lec != 0x7U));
-
-    status_led_error((uint8_t)channel->nr, active);
+    channel->reg_status.ecr = channel->channel.Instance->ECR;
+    channel->reg_status.psr = channel->channel.Instance->PSR; /* Clear-on-read. */
 }
 
-uint32_t can_get_error_status(can_data_t *channel)
+bool can_drv_bus_error_pending(const struct can_channel *channel)
 {
-    /* PSR.LEC is read-once and the caller drops it while RX is pending: return the last status. */
-    if (can_is_rx_pending(channel)) {
-        can_update_error_led(channel, channel->last_err);
-        return channel->last_err;
+    const uint32_t psr = channel->reg_status.psr;
+
+    return can_is_lec_error((uint8_t)MCAN_PSR_LEC_GET(psr)) ||
+           can_is_lec_error((uint8_t)MCAN_PSR_DLEC_GET(psr));
+}
+
+bool can_drv_handle_bus_error(const struct can_channel *channel, struct gs_host_frame *frame)
+{
+    const uint32_t ecr = channel->reg_status.ecr;
+    const uint8_t tx_err = (uint8_t)MCAN_ECR_TEC_GET(ecr);
+    const uint8_t rx_err = (uint8_t)MCAN_ECR_REC_GET(ecr);
+
+    if (tx_err == 0U && rx_err == 0U) {
+        return false;
     }
 
-    const uint32_t err = channel->channel.Instance->PSR;
-    can_update_error_led(channel, err);
-    return err;
+    frame->classic_can->data[6] = tx_err;
+    frame->classic_can->data[7] = rx_err;
+
+    frame->can_id |= CAN_ERR_PROT | CAN_ERR_BUSERROR | CAN_ERR_CNT;
+
+    const uint32_t psr = channel->reg_status.psr;
+    can_lec_error_to_frame(frame, (uint8_t)MCAN_PSR_LEC_GET(psr));
+    can_lec_error_to_frame(frame, (uint8_t)MCAN_PSR_DLEC_GET(psr));
+
+    return true;
 }
 
-void can_manage_bus_off_recovery(can_data_t *channel, uint32_t err)
+enum gs_can_state can_drv_get_state(const struct can_channel *channel)
 {
-    /* bxcan recovers from bus-off itself, the M_CAN does not: clear the CCCR.INIT it sets. */
-    if ((0U != (err & MCAN_PSR_BO_MASK)) &&
-        can_is_enabled(channel) &&
-        (0U != (channel->channel.Instance->CCCR & MCAN_CCCR_INIT_MASK))) {
-        channel->channel.Instance->CCCR &= ~MCAN_CCCR_INIT_MASK;
+    const uint32_t psr = channel->reg_status.psr;
 
-        for (uint32_t i = 0U; i < 100U; i++) {
-            if (0U == (channel->channel.Instance->CCCR & MCAN_CCCR_INIT_MASK)) {
-                break;
-            }
+    if (!(psr & (MCAN_PSR_BO_MASK | MCAN_PSR_EW_MASK | MCAN_PSR_EP_MASK))) {
+        return GS_CAN_STATE_ERROR_ACTIVE;
+    }
+    if (psr & MCAN_PSR_BO_MASK) {
+        return GS_CAN_STATE_BUS_OFF;
+    }
+    if (psr & MCAN_PSR_EP_MASK) {
+        return GS_CAN_STATE_ERROR_PASSIVE;
+    }
+
+    return GS_CAN_STATE_ERROR_WARNING;
+}
+
+void can_drv_get_device_state(const struct can_channel *channel, struct gs_device_state *state)
+{
+    const uint32_t ecr = channel->reg_status.ecr;
+
+    state->state = can_drv_get_state(channel);
+    state->rxerr = (uint8_t)MCAN_ECR_REC_GET(ecr);
+    state->txerr = (uint8_t)MCAN_ECR_TEC_GET(ecr);
+}
+
+void can_drv_handle_state_change(const struct can_channel *channel, struct gs_host_frame *frame)
+{
+    const uint32_t ecr = channel->reg_status.ecr;
+
+    const uint8_t tx_err = (uint8_t)MCAN_ECR_TEC_GET(ecr);
+    const uint8_t rx_err = (uint8_t)MCAN_ECR_REC_GET(ecr);
+
+    const enum gs_can_state tx_state = can_err_to_state(tx_err);
+    const enum gs_can_state rx_state = can_err_to_state(rx_err);
+
+    if (tx_state >= rx_state) {
+        frame->classic_can->data[1] |= gs_can_tx_state_to_frame(tx_state);
+    }
+    if (tx_state <= rx_state) {
+        frame->classic_can->data[1] |= gs_can_rx_state_to_frame(rx_state);
+    }
+}
+
+void can_drv_get_device_tdc(const struct can_channel *channel, struct gs_device_tdc *tdc)
+{
+    const uint32_t tdcv = MCAN_PSR_TDCV_GET(channel->reg_status.psr);
+
+    /* No FD frame sent yet. */
+    if (channel->tdc.tdco >= tdcv) {
+        return;
+    }
+
+    tdc->tdcv = tdcv - channel->tdc.tdco;
+}
+
+static void mcan_synchronize_bus(struct can_channel *channel)
+{
+    const uint32_t timeout = HAL_GetTick() + M_CAN_SYNC_BUS_TIMEOUT_MS;
+    uint32_t now;
+
+    do {
+        can_drv_read_reg_status(channel);
+        if (MCAN_PSR_ACT_GET(channel->reg_status.psr) != M_CAN_PSR_ACT_SYNC) {
+            return;
         }
-    }
+
+        now = HAL_GetTick();
+    } while (!time_after(now, timeout));
 }
 
-bool can_has_error_status_changed(uint32_t last_err, uint32_t curr_err)
+void can_drv_handle_bus_off_recovery(struct can_channel *channel)
 {
-    uint8_t curr_lec = (uint8_t)MCAN_PSR_LEC_GET(curr_err);
+    FDCAN_GlobalTypeDef *base = channel->channel.Instance;
 
-    /* A valid LEC means "an error since the last read": report repeats, they are new errors. */
-    if ((0x0U != curr_lec) && (0x7U != curr_lec)) {
-        /* An error is being reported in last error code field */
-        return true;
+    /* Restart M_CAN. */
+    base->TXBCR = MCAN_TXBCR_CR_SET(0x7U);
+    base->CCCR |= MCAN_CCCR_INIT_MASK;
+    while ((base->CCCR & MCAN_CCCR_INIT_MASK) == 0U) {
+        ;
+    }
+    base->CCCR &= ~MCAN_CCCR_INIT_MASK;
+    while ((base->CCCR & MCAN_CCCR_INIT_MASK) != 0U) {
+        ;
     }
 
-    /* Error status reported by any other field has changed. */
-    return (last_err & ~MCAN_PSR_LEC_MASK) != (curr_err & ~MCAN_PSR_LEC_MASK);
-}
-
-static bool status_is_active(uint32_t err)
-{
-    return !(err & (MCAN_PSR_BO_MASK | MCAN_PSR_EP_MASK));
-}
-
-bool can_parse_error_status(can_data_t *channel, struct gs_host_frame *frame, uint32_t last_err, uint32_t curr_err)
-{
-    bool should_send = false;
-
-    frame->echo_id = 0xFFFFFFFFU;
-    frame->can_id = CAN_ERR_FLAG;
-    frame->can_dlc = CAN_ERR_DLC;
-    /* Classic error frame, stale flag byte: the FD bit selects the USB layout. */
-    frame->flags = 0U;
-    frame->classic_can->data[0] = CAN_ERR_LOSTARB_UNSPEC;
-    frame->classic_can->data[1] = CAN_ERR_CRTL_UNSPEC;
-    frame->classic_can->data[2] = CAN_ERR_PROT_UNSPEC;
-    frame->classic_can->data[3] = CAN_ERR_PROT_LOC_UNSPEC;
-    frame->classic_can->data[4] = CAN_ERR_TRX_UNSPEC;
-    frame->classic_can->data[5] = 0U;
-    frame->classic_can->data[6] = 0U;
-    frame->classic_can->data[7] = 0U;
-
-    /* We transitioned from passive/bus-off to active, so report the edge. */
-    if (!status_is_active(last_err) && status_is_active(curr_err)) {
-        frame->can_id |= CAN_ERR_CRTL;
-        frame->classic_can->data[1] |= CAN_ERR_CRTL_ACTIVE;
-        should_send = true;
-    }
-
-    if (curr_err & MCAN_PSR_BO_MASK) {
-        if (!(last_err & MCAN_PSR_BO_MASK)) {
-            /* We transitioned to bus-off. */
-            frame->can_id |= CAN_ERR_BUSOFF;
-            should_send = true;
-        }
-    } else if (last_err & MCAN_PSR_BO_MASK) {
-        /* Bus-off -> back on the bus (Linux counts this as a restart). */
-        frame->can_id |= CAN_ERR_RESTARTED;
-        should_send = true;
-    }
-
-    /* The Linux sja1000 driver puts the counters here. */
-    frame->classic_can->data[6] = (uint8_t)MCAN_ECR_TEC_GET(channel->channel.Instance->ECR);
-    frame->classic_can->data[7] = (uint8_t)MCAN_ECR_REC_GET(channel->channel.Instance->ECR);
-
-    if (curr_err & MCAN_PSR_EP_MASK) {
-        if (!(last_err & MCAN_PSR_EP_MASK)) {
-            frame->can_id |= CAN_ERR_CRTL;
-            frame->classic_can->data[1] |= CAN_ERR_CRTL_RX_PASSIVE | CAN_ERR_CRTL_TX_PASSIVE;
-            should_send = true;
-        }
-    } else if (curr_err & MCAN_PSR_EW_MASK) {
-        if (!(last_err & MCAN_PSR_EW_MASK)) {
-            frame->can_id |= CAN_ERR_CRTL;
-            frame->classic_can->data[1] |= CAN_ERR_CRTL_RX_WARNING | CAN_ERR_CRTL_TX_WARNING;
-            should_send = true;
-        }
-    }
-
-    switch ((uint8_t)MCAN_PSR_LEC_GET(curr_err)) {
-    case 0x01U: /* stuff error */
-        frame->can_id |= CAN_ERR_PROT;
-        frame->classic_can->data[2] |= CAN_ERR_PROT_STUFF;
-        should_send = true;
-        break;
-    case 0x02U: /* form error */
-        frame->can_id |= CAN_ERR_PROT;
-        frame->classic_can->data[2] |= CAN_ERR_PROT_FORM;
-        should_send = true;
-        break;
-    case 0x03U: /* ack error */
-        frame->can_id |= CAN_ERR_ACK;
-        should_send = true;
-        break;
-    case 0x04U: /* bit recessive error */
-        frame->can_id |= CAN_ERR_PROT;
-        frame->classic_can->data[2] |= CAN_ERR_PROT_BIT1;
-        should_send = true;
-        break;
-    case 0x05U: /* bit dominant error */
-        frame->can_id |= CAN_ERR_PROT;
-        frame->classic_can->data[2] |= CAN_ERR_PROT_BIT0;
-        should_send = true;
-        break;
-    case 0x06U: /* CRC error */
-        frame->can_id |= CAN_ERR_PROT;
-        frame->classic_can->data[3] |= CAN_ERR_PROT_LOC_CRC_SEQ;
-        should_send = true;
-        break;
-    default: /* 0 = no error, 7 = no change */
-        break;
-    }
-
-    return should_send;
+    mcan_synchronize_bus(channel);
 }

@@ -1,6 +1,6 @@
 # candleLight_fw_hpm_port Build Guide
 
-This repository is a candleLight / gs_usb compatible USB ⇄ CAN-FD application for HPMicro HPM5321/HPM5361, built on the HPM SDK and CherryUSB's USB device stack. This document explains how to set up the environment and build with CMake presets.
+This repository is a candleLight / gs_usb compatible USB ⇄ CAN-FD application for HPMicro MCAN devices: HSCanT, HSCanT-Lite and the MCAN-capable hpm_sdk EVKs. It is built on the HPM SDK and CherryUSB's USB device stack. This document explains how to set up the environment and build with CMake presets.
 
 > 中文版见 [README_build_zh.md](./README_build_zh.md)。Project overview: [README.md](./README.md) (English) / [README_zh.md](./README_zh.md) (中文).
 
@@ -40,6 +40,12 @@ The original candleLight sources are kept as a git submodule. If `candleLight_fw
 ```bash
 git submodule update --init --recursive
 ```
+
+The submodule is pinned to the `hpm-multichannel` branch of our candleLight fork,
+which is based on upstream `marckleinebudde/candleLight_fw`'s `multichannel`
+branch (the branch with the current CAN error, bus-off and M_CAN work). The HPM
+port adds only the board blocks in `include/config.h`; the platform code lives
+in this repository.
 
 ### 1.4 DFU bootloader (needed for flashing, not for compiling)
 
@@ -229,7 +235,7 @@ Key build configuration (see `CMakeLists.txt`):
 
 The build creates `build/<preset>/candle_include/`, containing **symlinks to every header in `candleLight_fw/include/` except `board.h`**. That is deliberate: `board.h` must resolve to the board package (a local `boards/<BOARD>/board.h`, or the SDK's `$HPM_SDK_BASE/boards/<BOARD>/board.h` for an EVK), while candleLight's own board abstraction is reachable as `board_layout.h`. Do not "fix" this by renaming files.
 
-For an EVK, `boards/hpmicro_evk/hpmicro_evk.h` is force-included (`-include`) into every application source. It includes the SDK's `board.h` and then defines the candle contract (`BOARD_CAN_COUNT`, `BOARD_CAN_INSTANCES`, `BOARD_USB_BASE`, ...) on top of it. Nothing in the SDK is patched or copied.
+The generated directory also exposes candleLight's `include/zephyr` subdirectory. All application sources are compiled with a generated `app_preinclude.h` (via `-include`): it brings in `version.h` and the hardware `board.h`; for an EVK it brings in `boards/hpmicro_evk/hpmicro_evk.h` instead, which includes the SDK's `board.h` and then defines the candle contract (`BOARD_CAN_COUNT`, `BOARD_CAN_INSTANCES`, `BOARD_USB_BASE`, ...). Nothing in the SDK is patched or copied.
 
 ---
 
@@ -259,7 +265,7 @@ Nothing in `port/` or `src/` has to change.
 **For a board with its own package** (a custom board, or a non-EVK design):
 
 1. Create `boards/<name>/` with at least `board.h`, `board.c` and `pinmux.c`. The required macros and functions are listed and enforced in **`port/board_contract.h`** (`BOARD_CAN_COUNT`, `BOARD_CAN_INSTANCES`, `BOARD_USB_BASE`, `BOARD_USB_IRQn`, `BOARD_HAS_SYS_LED`, `BOARD_BGPR` on BCFG SoCs, and `board_init()` / `board_init_usb()` / `board_delay_ms()` / `init_can_pins()`). `board_init_can_clock()` is provided by the board package.
-2. Add a `BOARD_<name>` block to `candleLight_fw/include/config.h` — USB strings, `NUM_CAN_CHANNEL`, `CAN_CLOCK_SPEED`, `CONFIG_CANFD` (and `TERM_Pin` if the board really has a switchable terminator).
+2. Add a `BOARD_<name>` block to `candleLight_fw/include/config.h` — USB strings, `NUM_CAN_CHANNEL`, `CAN_CLOCK_SPEED`, `CONFIG_CANFD` (and `CONFIG_TERMINATION` + `TERM_Pin` if the board really has a switchable terminator).
 3. Add a preset in `CMakePresets.json` with `-DBOARD=<name>`.
 
 `BOARD_CAN_COUNT` and `NUM_CAN_CHANNEL` should agree.
