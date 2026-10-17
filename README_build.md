@@ -41,9 +41,10 @@ The original candleLight sources are kept as a git submodule. If `candleLight_fw
 git submodule update --init --recursive
 ```
 
-The submodule is pinned to the `hpm-multichannel` branch of our candleLight fork,
-which is based on upstream `marckleinebudde/candleLight_fw`'s `multichannel`
-branch (the branch with the current CAN error, bus-off and M_CAN work). The HPM
+The submodule is pinned to the `marckleinebudde-multichannel-hpm` branch of our
+fork, a modified version of `marckleinebudde/candleLight_fw`'s upstream
+`multichannel` branch (the branch with the current CAN error, bus-off and M_CAN
+work). The HPM
 port adds only the board blocks in `include/config.h`; the platform code lives
 in this repository.
 

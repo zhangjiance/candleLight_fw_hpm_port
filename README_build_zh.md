@@ -41,9 +41,9 @@ candleLight 原始源码以 git 子模块形式保存。若 `candleLight_fw/` �
 git submodule update --init --recursive
 ```
 
-子模块固定到本仓库 fork 的 `hpm-multichannel` 分支，该分支基于上游
-`marckleinebudde/candleLight_fw` 的 `multichannel` 分支（包含最新的 CAN 错误、
-bus-off 与 M_CAN 相关改动）。HPM 移植只在 `include/config.h` 中增加板级配置块，
+子模块固定到本仓库 fork 的 `marckleinebudde-multichannel-hpm` 分支；它是
+`marckleinebudde/candleLight_fw` 上游 `multichannel` 分支（包含最新的 CAN 错误、
+bus-off 与 M_CAN 相关改动）的修改版。HPM 移植只在 `include/config.h` 中增加板级配置块，
 平台代码全部位于本仓库。
 
 ### 1.4 DFU bootloader（烧录需要，编译不需要）
