@@ -1,13 +1,14 @@
 
-#include "board_layout.h" /* candleLight's board abstraction, to be filled in */
+#include "board_layout.h" /* CandleLight board API */
 #include "can.h"
+#include "can_common.h"
 #include "config.h"
 #include "gpio.h"
 #include "hal_include.h"
 
 #include "hpm_soc.h"
-#include "board.h"          /* the board package */
-#include "board_contract.h" /* required macros + compile time checks */
+#include "board.h"          /* hardware board */
+#include "board_contract.h" /* board contract */
 #include "hpm_clock_drv.h"
 #include "hpm_common.h"
 #include "hpm_gpio_drv.h"
@@ -16,9 +17,7 @@
 #include "dfu.h"
 #include "timer.h"
 
-static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan);
-
-/* MCAN instances wired on this board, from the board package. */
+/* Board MCAN instances. */
 static MCAN_Type *const s_can_instances[BOARD_CAN_COUNT] = { BOARD_CAN_INSTANCES };
 
 #if defined(MCAN_SOC_MSG_BUF_IN_AHB_RAM) && (MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1)
@@ -40,21 +39,21 @@ static void board_mcan_msg_buf_init(void)
 }
 #endif
 
-#ifdef TERM_Pin
+#ifdef CONFIG_TERMINATION
 static uint32_t s_termination;
 
-static void board_termination_set(can_data_t *channel, enum gs_can_termination_state state)
+static void board_termination_set_cb(can_data_t *channel, enum gs_can_termination_state state)
 {
-    board_can_set_termination((uint8_t)channel->nr,
+    board_can_set_termination((uint8_t)can_channel_get_nr(channel),
                               (state == GS_CAN_TERMINATION_STATE_ON) ? 1U : 0U);
 }
 
-enum gs_can_termination_state set_term(can_data_t *channel, enum gs_can_termination_state state)
+void set_term(can_data_t *channel, enum gs_can_termination_state state)
 {
-    uint8_t nr = (uint8_t)channel->nr;
+    uint8_t nr = can_channel_get_nr(channel);
 
     if (config.termination_set == NULL) {
-        return GS_CAN_TERMINATION_UNSUPPORTED;
+        return;
     }
 
     if (state == GS_CAN_TERMINATION_STATE_ON) {
@@ -62,12 +61,10 @@ enum gs_can_termination_state set_term(can_data_t *channel, enum gs_can_terminat
     } else if (state == GS_CAN_TERMINATION_STATE_OFF) {
         s_termination &= ~(1UL << (nr & 31U));
     } else {
-        return GS_CAN_TERMINATION_UNSUPPORTED;
+        return;
     }
 
     config.termination_set(channel, state);
-
-    return state;
 }
 
 enum gs_can_termination_state get_term(can_data_t *channel)
@@ -76,12 +73,12 @@ enum gs_can_termination_state get_term(can_data_t *channel)
         return GS_CAN_TERMINATION_UNSUPPORTED;
     }
 
-    return (((s_termination >> ((uint8_t)channel->nr & 31U)) & 1UL) != 0UL) ?
+    return (((s_termination >> (can_channel_get_nr(channel) & 31U)) & 1UL) != 0UL) ?
            GS_CAN_TERMINATION_STATE_ON : GS_CAN_TERMINATION_STATE_OFF;
 }
 #endif
 
-/* Long-press the user button (~500 ms) to request the bootloader. */
+/* Long-press to enter DFU. */
 #ifdef BOARD_APP_GPIO_CTRL
 static void board_mainloop_callback(void)
 {
@@ -102,12 +99,10 @@ static void board_mainloop_callback(void)
 }
 #endif
 
-struct BoardConfig config = {
-    .setup = board_setup,
-    /* Transceivers stay as the board package left them. */
+struct board_config config = {
     .phy_power_set = NULL,
-#ifdef TERM_Pin
-    .termination_set = board_termination_set,
+#ifdef CONFIG_TERMINATION
+    .termination_set = board_termination_set_cb,
 #else
     .termination_set = NULL,
 #endif
@@ -116,10 +111,9 @@ struct BoardConfig config = {
 #else
     .mainloop_callback = NULL,
 #endif
-    /* channels[] is filled by board_setup() at runtime. */
 };
 
-static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
+void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
 {
     unsigned int count;
 
@@ -132,10 +126,9 @@ static void board_setup(USBD_GS_CAN_HandleTypeDef *hcan)
     for (unsigned int i = 0U; i < count; i++) {
         MCAN_Type *instance = s_can_instances[i];
 
-        /* Publish the instance for can_init(), then mux the pads and start the CAN clock. */
-        config.channels[i].interface = instance;
+        /* Publish instance, mux pins, start clock. */
+        config.channel[i].interface = instance;
         init_can_pins(instance);
         (void)board_init_can_clock(instance);
     }
-
 }

@@ -543,7 +543,8 @@ static void gs_bridge_event(uint8_t busid, uint8_t event)
         if ((g_pdev->pClass != NULL) && (g_pdev->pClass->Init != NULL)) {
             (void)g_pdev->pClass->Init(g_pdev, 0U);
         }
-        USBD_GS_CAN_SendReceiveFromHost(g_pdev);
+        USBD_GS_CAN_ReceiveFromHost(g_pdev);
+        USBD_GS_CAN_SendToHost(g_pdev);
         break;
 
     case USBD_EVENT_RESET:

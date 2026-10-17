@@ -1,6 +1,6 @@
 # candleLight_fw_hpm_port 编译指导
 
-本仓库是基于 HPM SDK 与 CherryUSB 的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 应用程序，目标平台为 HPMicro HPM5321/HPM5361。本文档说明如何配置环境并使用 CMake preset 完成编译。
+本仓库是基于 HPM SDK 与 CherryUSB 的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 应用程序，面向 HPMicro MCAN 设备：HSCanT、HSCanT-Lite 以及带 MCAN 的 hpm_sdk EVK。本文档说明如何配置环境并使用 CMake preset 完成编译。
 
 > English version: [README_build.md](./README_build.md). 工程说明： [README.md](./README.md)（英文）/ [README_zh.md](./README_zh.md)（中文）。
 
@@ -40,6 +40,11 @@ candleLight 原始源码以 git 子模块形式保存。若 `candleLight_fw/` �
 ```bash
 git submodule update --init --recursive
 ```
+
+子模块固定到本仓库 fork 的 `hpm-multichannel` 分支，该分支基于上游
+`marckleinebudde/candleLight_fw` 的 `multichannel` 分支（包含最新的 CAN 错误、
+bus-off 与 M_CAN 相关改动）。HPM 移植只在 `include/config.h` 中增加板级配置块，
+平台代码全部位于本仓库。
 
 ### 1.4 DFU bootloader（烧录需要，编译不需要）
 
@@ -225,7 +230,7 @@ build/<preset>/output/candle_usb2canfd-<BOARD>.uf2   # 仅 flash_uf2 预设
 
 构建时会生成 `build/<preset>/candle_include/`，里面是 **`candleLight_fw/include/` 下除 `board.h` 之外所有头文件的符号链接**。这是刻意为之：`board.h` 必须解析到板级包（本仓库的 `boards/<BOARD>/board.h`，或 EVK 的 `$HPM_SDK_BASE/boards/<BOARD>/board.h`），而 candleLight 自己的板抽象则通过 `board_layout.h` 访问。**不要**试图通过改名来"修好"它。
 
-对 EVK 而言，`boards/hpmicro_evk/hpmicro_evk.h` 会被强制包含（`-include`）到每个应用源文件中：它先包含 SDK 的 `board.h`，再在其上定义 candle 所需的契约宏（`BOARD_CAN_COUNT`、`BOARD_CAN_INSTANCES`、`BOARD_USB_BASE` 等）。SDK 本身既不打补丁，也不复制。
+生成的目录还会暴露 candleLight 的 `include/zephyr` 子目录。所有应用源文件都会通过 `-include` 包含一个生成的 `app_preinclude.h`：它引入 `version.h` 和硬件 `board.h`；对 EVK 则改为引入 `boards/hpmicro_evk/hpmicro_evk.h`，由后者包含 SDK 的 `board.h` 并定义 candle 契约宏（`BOARD_CAN_COUNT`、`BOARD_CAN_INSTANCES`、`BOARD_USB_BASE` 等）。SDK 本身既不打补丁，也不复制。
 
 ---
 
@@ -255,7 +260,7 @@ cmake --build build/manual -j8
 **对于需要自带板级包的板子**（自定义板或非 EVK 设计）：
 
 1. 新建 `boards/<name>/`，至少包含 `board.h`、`board.c`、`pinmux.c`。所需宏与函数在 **`port/board_contract.h`** 中列出并在编译期强制检查（`BOARD_CAN_COUNT`、`BOARD_CAN_INSTANCES`、`BOARD_USB_BASE`、`BOARD_USB_IRQn`、`BOARD_HAS_SYS_LED`，BCFG 类 SoC 还需要 `BOARD_BGPR`，以及 `board_init()` / `board_init_usb()` / `board_delay_ms()` / `init_can_pins()`）。`board_init_can_clock()` 由板级包提供。
-2. 在 `candleLight_fw/include/config.h` 中增加 `BOARD_<name>` 块 —— USB 字符串、`NUM_CAN_CHANNEL`、`CAN_CLOCK_SPEED`、`CONFIG_CANFD`（若该板确实有可切换的终端电阻，再加 `TERM_Pin`）。
+2. 在 `candleLight_fw/include/config.h` 中增加 `BOARD_<name>` 块 —— USB 字符串、`NUM_CAN_CHANNEL`、`CAN_CLOCK_SPEED`、`CONFIG_CANFD`（若该板确实有可切换的终端电阻，再加 `CONFIG_TERMINATION` 和 `TERM_Pin`）。
 3. 在 `CMakePresets.json` 中增加一个带 `-DBOARD=<name>` 的预设。
 
 `BOARD_CAN_COUNT` 与 `NUM_CAN_CHANNEL` 应保持一致。

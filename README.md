@@ -1,8 +1,8 @@
 # candleLight_fw_hpm_port
 
-**candleLight / gs_usb compatible USB ⇄ CAN-FD firmware for HPMicro HPM5321/HPM5361 RISC-V MCUs**, built on the HPM SDK and CherryUSB.
+**candleLight / gs_usb compatible USB ⇄ CAN-FD firmware for HPMicro MCAN devices**, covering HSCanT, HSCanT-Lite and the MCAN-capable hpm_sdk EVKs, built on the HPM SDK and CherryUSB.
 
-The gs_usb protocol, the USB descriptors and — the important part — candleLight's frame linked-list engine are the *original* candleLight sources. Only the platform layer is new. A host running the stock Linux `gs_usb` driver (or `candle_usb` / `candump` / `can-utils`) therefore sees an ordinary candleLight / CANable device.
+The gs_usb protocol and candleLight's frame linked-list engine are the upstream candleLight sources; this repository adds the HPMicro platform layer and follows the upstream `multichannel` branch. A host running the stock Linux `gs_usb` driver sees an ordinary candleLight / CANable device.
 
 > 中文说明见 [README_zh.md](./README_zh.md)。Build instructions: [README_build.md](./README_build.md) (English) / [README_build_zh.md](./README_build_zh.md) (中文).
 
@@ -52,11 +52,11 @@ Tested means "exercised on real hardware". Please read this table before filing 
 | Multi-channel (4 × MCAN) operation | **Verified on hardware** — all four channels, including a three node bus |
 | Bit timing / sample point | **Verified** — host-negotiated sample points land in `NBTP`/`DBTP` (checked 500k/2M and 1M/4M at 80 %) |
 | Per-channel terminal resistor switch | **Verified on hardware** — `GS_CAN_FEATURE_TERMINATION`, driven by `ip link set canX type can termination 120` |
-| Bus error reporting (`CAN_ERR_ACK` / `PROT` / `CRTL` / `BUSOFF` / `RESTARTED`, TEC/REC, RX overflow `GS_CAN_FLAG_OVERFLOW`) | Implemented; ACK/PROT/CRTL/BUSOFF have been observed on a deliberately broken bus; `RESTARTED` and the RX overflow flag are new and **not verified on hardware yet**, a systematic regression pass is still missing |
-| WS2812 TX/RX activity LEDs | **Not implemented** |
+| CAN error / bus-off / TDC (upstream `multichannel`) | Implemented; M_CAN error, state, bus-off recovery and TDC paths build for every board, but need a hardware regression pass |
+| HSCanT WS2812 boot animation | **Verified on hardware** — the strip is cleared after the animation and channel LEDs stay off |
 | Throughput / stress testing | Not done |
 
-The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `DEVICE_CONFIG`, `TIMESTAMP`, `IDENTIFY`, `HOST_FORMAT`, TX echo, timestamps, `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`) is complete, and enumeration, DFU, frame forwarding and the terminator control have all been exercised end to end.
+The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `DEVICE_CONFIG`, `TIMESTAMP`, `IDENTIFY`, `HOST_FORMAT`, TX echo, timestamps, `LOOP_BACK` / `LISTEN_ONLY` / `ONE_SHOT` / `HW_TIMESTAMP` / `PAD_PKTS`, plus `GET_STATE` / `BERR` / `TDC` / `BUS_OFF_RECOVERY`) is complete, and enumeration, DFU, frame forwarding and the terminator control have all been exercised end to end.
 
 ### Known Gaps / Next Steps
 
@@ -64,36 +64,39 @@ The command surface (`BITTIMING`, `DATA_BITTIMING`, `MODE`, `BT_CONST(_EXT)`, `D
 | --- | --- |
 | Error reporting regression | Exercise every class systematically: `CAN_ERR_ACK`, `PROT` (stuff / form / bit / CRC), `CRTL` (warning, passive), `BUSOFF`, `RESTARTED` (bus-off recovery), RX overrun (`GS_CAN_FLAG_OVERFLOW`), plus the TEC/REC fields in the payload |
 | Performance testing | Frames/s over USB High-Speed, multi-channel stress (`cangen` on several channels at once), `RX dropped/missed`, TX latency. USB is already HS, so the ceiling is the CAN bit rate and the per-frame host overhead, not the link |
-| Channel LEDs | HSCanT: eight WS2812 LEDs (SPI1 + DMA), one TX/RX pair per CAN0..3 channel. HSCanT-Lite: eight GPIO LEDs per channel set, one white status LED (steady when started, flashes on traffic) plus one red error LED (blinks on faults, off otherwise) |
+| Hardware validation | Run CAN error, bus-off recovery and TDC on real hardware for all boards |
 
 ### Feature Flags Reported to the Host
 
-```37:46:src/can_hpm.c
+```c
         GS_CAN_FEATURE_LISTEN_ONLY |
         GS_CAN_FEATURE_LOOP_BACK |
         GS_CAN_FEATURE_HW_TIMESTAMP |
         GS_CAN_FEATURE_IDENTIFY |
         GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE |
         (IS_ENABLED(CONFIG_CANFD) ?
-         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT : 0)
-#ifdef TERM_Pin
-        | GS_CAN_FEATURE_TERMINATION
-#endif
+         GS_CAN_FEATURE_FD | GS_CAN_FEATURE_BT_CONST_EXT |
+         GS_CAN_FEATURE_TDC : 0) |
+        (IS_ENABLED(CONFIG_TERMINATION) ?
+         GS_CAN_FEATURE_TERMINATION : 0) |
+        GS_CAN_FEATURE_BERR_REPORTING |
+        GS_CAN_FEATURE_GET_STATE |
+        GS_CAN_FEATURE_BUS_OFF_RECOVERY
 ```
 
-`GS_CAN_FEATURE_TERMINATION` **is** advertised for `BOARD_hscant`: `TERM_Pin` is defined there, which selects `set_term()` / `get_term()` (implemented in `src/port_board.c`, since this port does not compile upstream's `src/gpio.c`) and reaches the board through `config.termination_set` → `board_can_set_termination()` (`CANx_RES`, one per channel). The host uses it with `ip link set canX type can termination 120` (or `termination 0`), which only works while the interface is down. After reset the terminators are off, matching the level `pinmux.c` leaves `CANx_RES` in.
+`GS_CAN_FEATURE_TERMINATION` **is** advertised for `BOARD_hscant`: `CONFIG_TERMINATION` is defined there, which selects `set_term()` / `get_term()` (implemented in `src/port_board.c`, since this port does not compile upstream's `src/gpio.c`) and reaches the board through `config.termination_set` → `board_can_set_termination()` (`CANx_RES`, one per channel). The host uses it with `ip link set canX type can termination 120` (or `termination 0`), which only works while the interface is down. After reset the terminators are off, matching the level `pinmux.c` leaves `CANx_RES` in.
 
 ---
 
 ## Architecture
 
-The design goal is simple: **keep candleLight's application logic byte-for-byte intact and put every platform dependency behind one narrow seam**, so that upstream fixes to the frame engine or the protocol can be picked up by copying files.
+The design goal is to keep candleLight's application logic in upstream sources and put every platform dependency behind one narrow seam, so upstream changes can be adopted by refreshing a few files with include seams.
 
 ```
                        ┌──────────────────────────────────────────┐
   candleLight_fw       │  src/candle/main.c        (copy, seam)   │
-  (git submodule,      │  src/candle/usbd_gs_can.c (copy, seam)   │
-   the reference)      │  src/can_common.c   (compiled verbatim)  │
+  (upstream            │  src/candle/usbd_gs_can.c (copy, seam)   │
+   multichannel)       │  src/candle/can_common.c  (copy, seam)  │
                        │  src/led.c, util.c, usbd_desc.c (verbatim)│
                        └──────────────────┬───────────────────────┘
                                           │  STM32 HAL + STM32 USBD API
@@ -118,23 +121,16 @@ The design goal is simple: **keep candleLight's application logic byte-for-byte 
                        └──────────────────────────────────────────┘
 ```
 
-### Layer 1 — `candleLight_fw/` (original code)
+### Layer 1 — `candleLight_fw/` (upstream sources)
 
 | File | How it is used |
 | --- | --- |
-| `src/can_common.c` | **compiled verbatim** — the frame linked-list pool (`CAN_SendFrame` / `CAN_ReceiveFrame` / `CAN_HandleError`), TX echo, RX queue |
-| `src/led.c`, `src/util.c`, `src/usbd_desc.c` | **compiled verbatim** |
-| `src/usbd_gs_can.c` | copied to `src/candle/`, **only the `#include` block changed** |
-| `src/main.c` | copied to `src/candle/`, **only the `#include` block changed** |
+| `src/can_common.c` | copied to `src/candle/`; only `board.h` → `board_layout.h` |
+| `src/led.c`, `src/util.c`, `src/usbd_desc.c` | compiled verbatim |
+| `src/usbd_gs_can.c` | copied to `src/candle/`; include seam and `sw_version` |
+| `src/main.c` | copied to `src/candle/`; include seam and status-LED hooks |
 
-The copies exist for exactly one reason: those two files pull in STM32 USB Device Library headers that do not exist here. Everything below the include block is untouched, so a `diff` against the submodule stays a five-line hunk.
-
-```42:45:src/candle/usbd_gs_can.c
- * are replaced by our CherryUSB-backed compatibility layer.  Everything else
- * in this file is an unmodified copy of candleLight_fw/src/usbd_gs_can.c.
- */
-#include "usbd_compat.h"
-```
+The copies exist because the files pull in STM32 USB Device Library headers that do not exist here. Their diff against the submodule is limited to the include block plus a few HPMicro hooks.
 
 ### Layer 2 — `port/` (the platform seam)
 
@@ -144,7 +140,7 @@ Contains **no hardware code**, only contracts and shims:
 - **`cmsis_device.h`** — the handful of CMSIS intrinsics the original code touches, on RISC-V: `__disable_irq`, `__enable_irq`, `__DMB`, `__BKPT`, `NVIC_SystemReset`.
 - **`usbd_compat.h`** — STM32 USB Device Library **types, constants and prototypes** taken from `usbd_def.h` (`USBD_HandleTypeDef`, `USBD_ClassTypeDef`, the `USBD_LL_*` / `USBD_Ctl*` set, descriptor index macros).
 - **`usbd_def.h`, `usbd_ctlreq.h`** — thin stand-ins so the original `#include`s resolve.
-- **`board_layout.h`** — candleLight's board abstraction (`struct BoardConfig`, `config.channels[]`), renamed to free the name `board.h`.
+- **`board_layout.h`** — candleLight's board abstraction (`struct board_config`, `config.channel[]`), renamed to free the name `board.h`.
 - **`board_contract.h`** — what every board package must provide, enforced with `#error` at compile time.
 - **`usbd_bridge.h`** — the one symbol the rest of the firmware needs from the bridge.
 
@@ -153,13 +149,14 @@ Contains **no hardware code**, only contracts and shims:
 | File | Role |
 | --- | --- |
 | `usbd_bridge.c` | **the compatibility layer** — see below |
-| `can_hpm.c` | port of `candleLight_fw/src/can/m_can.c` onto `hpm_mcan_drv` |
+| `can_hpm.c` | M_CAN driver on `hpm_mcan_drv`: `can_drv_*`, error/bus-off/TDC |
 | `timer.c` | `timer_get()` = free-running µs counter on `mcycle` (no peripheral timer consumed, safe from interrupts) |
 | `dfu_hpm.c` | `dfu_run_bootloader()` — writes the BGPR/PDGO magic, then re-enters the ROM boot flow |
 | `port_device.c` | `HAL_Init()` bring-up (clock tree, USB PHY, D-cache policy), GPIO shim, chip UUID loader |
-| `port_board.c` | weak default `board_init_can_clock()`, fills `config.channels[].interface` |
+| `port_board.c` | `board_setup()`, fills `config.channel[]`, termination hooks |
+| `status_led.c`, `ws2812.c` | boot animation and status LEDs |
 | `usb_config.h` | CherryUSB configuration |
-| `candle/` | the two adapted original files |
+| `candle/` | the three adapted original files |
 
 ### Layer 4 — `boards/<BOARD>/`
 
@@ -212,7 +209,7 @@ Nothing in `port/` or `src/` has to care.
 
 ### 5. CAN: `m_can.c` → `can_hpm.c`
 
-The HPM MCAN is a Bosch M_CAN, so `candleLight_fw/src/can/m_can.c` maps over almost 1:1 — same bit-timing constraints, same `gs_host_frame` mapping, same PSR/ECR/CCCR error-status handling. Only the STM32 HAL calls are replaced:
+The HPM MCAN is a Bosch M_CAN, so `candleLight_fw/src/can/m_can.c` still maps over conceptually: same bit-timing constraints, `gs_host_frame` mapping and PSR/ECR/CCCR status handling. Upstream now routes the driver through `can_drv_*`; `can_hpm.c` implements it on HPM MCAN: enable/disable, register snapshot, bus error, state, TDC and bus-off recovery. The STM32 HAL calls map as follows:
 
 | STM32 FDCAN | HPM MCAN |
 | --- | --- |
@@ -222,11 +219,11 @@ The HPM MCAN is a Bosch M_CAN, so `candleLight_fw/src/can/m_can.c` maps over alm
 | `HAL_FDCAN_GetRxMessage` | `mcan_read_rxfifo()` |
 | `HAL_FDCAN_GetRxFifoFillLevel` | `RXF0S.F0FL` |
 
-All queueing and linked-list work still happens in the unmodified `can_common.c` + `src/candle/usbd_gs_can.c` (a copy).
+All queueing and linked-list work still happens in `can_common.c` and `src/candle/usbd_gs_can.c`; both are copies of the submodule with only their include seams changed.
 
 Four things do not map over 1:1 and cost most of the debugging time:
 
-- **Message RAM** — with `MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1` (HPM5321/HPM5361) it is a slice of AHB SRAM that the
+- **Message RAM** — with `MCAN_SOC_MSG_BUF_IN_AHB_RAM == 1` it is a slice of AHB SRAM that the
   application must register through `mcan_set_msg_buf_attr()` before the first `mcan_init()`. Otherwise
   `mcan_get_ram_size()` returns 0, `mcan_init()` fails *before* clearing `CCCR.INIT`, and every channel comes
   up on the host side but never transmits, receives or reports an error.
@@ -261,17 +258,19 @@ candleLight_fw_hpm_port/
 │   ├── board_contract.h        # Board package requirements + static checks
 │   └── usbd_bridge.h           # Bridge-facing API
 ├── src/
-│   ├── candle/                 # Original candleLight files (include seam only)
+│   ├── candle/                 # Upstream files with include seams
 │   │   ├── main.c
-│   │   └── usbd_gs_can.c
+│   │   ├── usbd_gs_can.c
+│   │   └── can_common.c
 │   ├── usbd_bridge.c           # THE COMPATIBILITY LAYER (CherryUSB ⇄ STM32 USBD)
 │   ├── can_hpm.c               # m_can.c port onto hpm_mcan_drv
 │   ├── timer.c                 # timer_get() on mcycle
 │   ├── dfu_hpm.c               # dfu_run_bootloader()
 │   ├── port_device.c           # HAL_Init(), GPIO shim, UUID loader
-│   ├── port_board.c            # config.channels[] wiring, weak CAN clock
+│   ├── port_board.c            # board_setup(), config.channel[]
+│   ├── status_led.c  ws2812.c  # LEDs and boot animation
 │   └── usb_config.h            # CherryUSB configuration
-├── candleLight_fw/             # git submodule (reference sources)
+├── candleLight_fw/             # submodule: upstream multichannel + HPM boards
 ├── README.md                   # Project overview (English, this file)
 ├── README_zh.md                # Project overview (中文)
 ├── README_build.md             # Build guide (English)

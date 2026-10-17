@@ -7,7 +7,7 @@
 #   candleLight_fw (git submodule) = the top level application:
 #       src/main.c          - copied to src/candle/ (platform include seam only)
 #       src/usbd_gs_can.c   - copied to src/candle/ (platform include seam only)
-#       src/can_common.c    - compiled verbatim (frame linked-list engine)
+#       src/can_common.c    - copied to src/candle/ (include seam only)
 #       src/led.c           - compiled verbatim
 #       src/util.c          - compiled verbatim
 #       src/usbd_desc.c     - compiled verbatim
@@ -157,6 +157,17 @@ if(GIT_EXECUTABLE)
 endif()
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/version.h "#define GIT_HASH \"${GIT_HASH}\"\n")
 
+# Preinclude: version.h plus, for EVKs, hpmicro_evk.h.
+set(APP_PREINCLUDE ${CMAKE_CURRENT_BINARY_DIR}/app_preinclude.h)
+file(WRITE ${APP_PREINCLUDE} "#include \"version.h\"\n")
+if(HPMICRO_EVK)
+    file(APPEND ${APP_PREINCLUDE} "#include \"hpmicro_evk.h\"\n")
+else()
+    # board.h first so hpm_common.h defines ARRAY_SIZE.
+    file(APPEND ${APP_PREINCLUDE} "#include \"board.h\"\n")
+endif()
+target_compile_options(app PRIVATE "-include" "${APP_PREINCLUDE}")
+
 # ---------------------------------------------------------------------------
 # Application version, as published to the bootloader through the shared
 # bl_setting block (src/bl_setting.c writes app_version.major/minor/patch).
@@ -202,6 +213,11 @@ foreach(_hdr IN LISTS CANDLE_HEADERS)
         file(CREATE_LINK ${CANDLE_FW}/include/${_hdr} ${CANDLE_INC}/${_hdr} SYMBOLIC)
     endif()
 endforeach()
+# Expose candleLight's include/zephyr subdirectory.
+file(REMOVE_RECURSE ${CANDLE_INC}/zephyr)
+file(CREATE_LINK ${CANDLE_FW}/include/zephyr ${CANDLE_INC}/zephyr SYMBOLIC)
+# Prefer candleLight headers over same-named SDK headers (e.g. usbd_dfu.h).
+target_include_directories(app BEFORE PRIVATE ${CANDLE_INC})
 
 # ---------------------------------------------------------------------------
 # Include paths
@@ -227,13 +243,11 @@ sdk_inc(${CANDLE_FW}/libs/STM32_USB_Device_Library/config)
 # the SDK board name (used to pick the board package and its YAML), while the
 # application is always built as an HPMicro EVK.
 if(HPMICRO_EVK)
-    sdk_compile_definitions(-DBOARD_hpmicro_evk -DSTM32G4)
-    # board.h (the SDK EVK's) + the candle bindings, before anything else.
-    target_compile_options(app PRIVATE
-        "-include" "${HPMICRO_EVK_DIR}/hpmicro_evk.h")
+    sdk_compile_definitions(-DBOARD_hpmicro_evk -DSTM32G4 -DCONFIG_M_CAN)
+    # Bindings come from app_preinclude.h.
 else()
     string(REPLACE "-" "_" BOARD_MACRO "${BOARD}")
-    sdk_compile_definitions(-DBOARD_${BOARD_MACRO} -DSTM32G4)
+    sdk_compile_definitions(-DBOARD_${BOARD_MACRO} -DSTM32G4 -DCONFIG_M_CAN)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -242,7 +256,7 @@ endif()
 # candleLight_fw top level application
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/candle/main.c)
 sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/candle/usbd_gs_can.c)
-sdk_app_src(${CANDLE_FW}/src/can_common.c)
+sdk_app_src(${CMAKE_CURRENT_SOURCE_DIR}/src/candle/can_common.c)
 sdk_app_src(${CANDLE_FW}/src/led.c)
 sdk_app_src(${CANDLE_FW}/src/util.c)
 sdk_app_src(${CANDLE_FW}/src/usbd_desc.c)
