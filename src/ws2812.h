@@ -12,8 +12,9 @@ void ws2812_init(void);
 void ws2812_set_pixel(uint32_t index, uint8_t r, uint8_t g, uint8_t b);
 void ws2812_fill(uint8_t r, uint8_t g, uint8_t b);
 
-/* Push the frame buffer to SPI (waits for the previous frame); blocking = wait too. */
-void ws2812_update(bool blocking);
+/* Push the frame buffer to SPI (waits for the previous frame); blocking = wait too.
+ * Returns false if the frame was not handed to the SPI (busy/stuck controller). */
+bool ws2812_update(bool blocking);
 
 /* True while the last frame's SPI DMA is in flight. */
 bool ws2812_is_busy(void);

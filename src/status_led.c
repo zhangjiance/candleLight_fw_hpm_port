@@ -13,6 +13,18 @@
 #endif
 
 #define LED_COUNT          BOARD_WS2812_LED_COUNT
+#define CHAN_LED_COUNT     (LED_COUNT / 2U)
+
+/* Channel LED: steady while started, brief dark pulse per frame. */
+#define CHAN_STEADY_V          (0x06U)
+#define CHAN_TRAFFIC_OFF_MS    (30U)
+#define CHAN_TRAFFIC_REARM_MS  (45U)
+#define CHAN_TX_SKEW_MS        (3U)
+#define CHAN_RX_SKEW_MS        (15U)
+#define RENDER_MIN_INTERVAL_MS (10U)
+
+#define CHAN_TX_LED(c)         ((uint32_t)(c))
+#define CHAN_RX_LED(c)         ((uint32_t)(c) + CHAN_LED_COUNT)
 
 /* Sys LED heartbeat. */
 #define SYS_LED_TOGGLE_MS  (500U)
@@ -22,12 +34,22 @@
 #define ANIM_SWEEPS        (1U)
 #define ANIM_COMET_V       (0x20U)
 
+/* Per-LED traffic dark window. */
+static uint32_t s_off_until[LED_COUNT > 0U ? LED_COUNT : 1U];
+static uint32_t s_rearm_at[LED_COUNT > 0U ? LED_COUNT : 1U];
+static bool s_off_active[LED_COUNT > 0U ? LED_COUNT : 1U];
+
+/* Channels the host has started. */
+static bool s_chan_on[CHAN_LED_COUNT > 0U ? CHAN_LED_COUNT : 1U];
+
+static uint32_t s_last_render_ms;
+static volatile bool s_dirty;
 static uint32_t s_last_sys_led_ms;
 static uint32_t s_comet_left;
 static uint32_t s_comet_frame;
 static uint32_t s_comet_next_ms;
-static uint32_t s_clear_at;
-static uint8_t s_clear_retries;
+static uint32_t s_comet_settle_at;
+static bool s_comet_settle_pending;
 static bool s_ready;
 
 /* 8 bit HSV -> RGB. */
@@ -52,7 +74,28 @@ static void hsv2rgb(uint8_t h, uint8_t s, uint8_t v, uint8_t *r, uint8_t *g, uin
 static void strip_clear(void)
 {
     ws2812_fill(0U, 0U, 0U);
-    ws2812_update(true);
+    (void)ws2812_update(true);
+}
+
+static void compose(void)
+{
+    for (uint32_t i = 0U; i < LED_COUNT; i++) {
+        const bool tx = (i < CHAN_LED_COUNT);
+        const uint32_t channel = tx ? i : (i - CHAN_LED_COUNT);
+        uint8_t r = 0U;
+        uint8_t g = 0U;
+        uint8_t b = 0U;
+
+        if ((channel < CHAN_LED_COUNT) && s_chan_on[channel] && !s_off_active[i]) {
+            if (tx) {
+                g = CHAN_STEADY_V;
+            } else {
+                b = CHAN_STEADY_V;
+            }
+        }
+
+        ws2812_set_pixel(i, r, g, b);
+    }
 }
 
 void status_led_init(void)
@@ -84,7 +127,7 @@ static void comet_render(uint32_t frame)
         ws2812_set_pixel(led, r, g, b);
     }
 
-    ws2812_update(true);
+    (void)ws2812_update(true);
 }
 
 void status_led_boot_anim(void)
@@ -96,22 +139,56 @@ void status_led_boot_anim(void)
     s_comet_left = (2U * LED_COUNT) * ANIM_SWEEPS;
     s_comet_frame = 0U;
     s_comet_next_ms = HAL_GetTick();
+    s_comet_settle_pending = false;
 }
 
 void status_led_channel(uint8_t channel, bool enabled)
 {
-    (void)channel;
-    (void)enabled;
+    if (channel >= CHAN_LED_COUNT) {
+        return;
+    }
+
+    s_chan_on[channel] = enabled;
+
+    if (!enabled) {
+        /* Drop leftover dark windows so both LEDs go dark at once. */
+        const uint32_t tx = CHAN_TX_LED(channel);
+        const uint32_t rx = CHAN_RX_LED(channel);
+
+        s_off_active[tx] = false;
+        s_off_active[rx] = false;
+        s_rearm_at[tx] = 0U;
+        s_rearm_at[rx] = 0U;
+    }
+
+    if (s_ready) {
+        s_dirty = true;
+    }
 }
 
 void status_led_activity(uint8_t channel, bool rx)
 {
-    (void)channel;
-    (void)rx;
+    /* Chain: CAN0..CAN3 TX, then CAN0..CAN3 RX. */
+    const uint32_t index = rx ? CHAN_RX_LED(channel) : CHAN_TX_LED(channel);
+    const uint32_t now = HAL_GetTick();
+    /* Closed firmware shifts the time base (tx -3 ms, rx -15 ms). */
+    const uint32_t t = now - (rx ? CHAN_RX_SKEW_MS : CHAN_TX_SKEW_MS);
+
+    if ((!s_ready) || (channel >= CHAN_LED_COUNT) || (index >= LED_COUNT)) {
+        return;
+    }
+
+    if ((int32_t)(t - s_rearm_at[index]) >= 0) {
+        s_off_until[index] = t + CHAN_TRAFFIC_OFF_MS;
+        s_rearm_at[index] = t + CHAN_TRAFFIC_REARM_MS;
+        s_off_active[index] = true;
+        s_dirty = true;
+    }
 }
 
 void status_led_error(uint8_t channel, bool active)
 {
+    /* The WS2812 chain has no dedicated error LED. */
     (void)channel;
     (void)active;
 }
@@ -131,6 +208,7 @@ void status_led_tick(void)
     }
 #endif
 
+    /* The comet owns the strip: skip the channel repaint while it runs. */
     if (s_comet_left > 0U) {
         if ((int32_t)(now - s_comet_next_ms) >= 0) {
             s_comet_next_ms = now + ANIM_FRAME_MS;
@@ -138,18 +216,44 @@ void status_led_tick(void)
             s_comet_frame++;
             s_comet_left--;
             if (s_comet_left == 0U) {
-                s_clear_at = now + ANIM_FRAME_MS;
-                s_clear_retries = 0U;
+                /* Let the last frame latch before touching the strip again. */
+                s_comet_settle_pending = true;
+                s_comet_settle_at = now + ANIM_FRAME_MS;
             }
+        }
+        return;
+    }
+
+    /*
+     * The final comet frame can still be shifting out when the next main-loop
+     * iteration arrives.  Blank the strip only after a full frame of quiet time,
+     * then leave one render interval before painting the channel state, so each
+     * frame is separated by a real WS2812 latch gap.
+     */
+    if (s_comet_settle_pending) {
+        if ((int32_t)(now - s_comet_settle_at) < 0) {
+            return;
+        }
+        s_comet_settle_pending = false;
+        strip_clear();
+        s_dirty = true;
+        s_last_render_ms = now;
+        return;
+    }
+
+    for (uint32_t i = 0U; i < LED_COUNT; i++) {
+        if (s_off_active[i] && ((int32_t)(now - s_off_until[i]) >= 0)) {
+            s_off_active[i] = false;
+            s_dirty = true;
         }
     }
 
-    if (s_clear_at != 0U && (int32_t)(now - s_clear_at) >= 0) {
-        strip_clear();
-        if (++s_clear_retries < 3U) {
-            s_clear_at = now + 10U;
-        } else {
-            s_clear_at = 0U;
+    /* Keep s_dirty set until the frame really went out: a rejected update must be retried. */
+    if (s_dirty && ((uint32_t)(now - s_last_render_ms) >= RENDER_MIN_INTERVAL_MS)) {
+        compose();
+        s_last_render_ms = now;
+        if (ws2812_update(true)) {
+            s_dirty = false;
         }
     }
 }

@@ -120,15 +120,15 @@ static bool ws2812_wait_line_idle(void)
     return true;
 }
 
-void ws2812_update(bool blocking)
+bool ws2812_update(bool blocking)
 {
     if (!s_ready) {
-        return;
+        return true;
     }
 
     /* Never restart a running transfer (it would garble the frame; the SDK returns busy). */
     if (!ws2812_wait_line_idle()) {
-        return;
+        return false;
     }
 
     for (uint32_t led = 0; led < BOARD_WS2812_LED_COUNT; led++) {
@@ -148,7 +148,7 @@ void ws2812_update(bool blocking)
     s_busy = true;
     if (hpm_spi_transmit_nonblocking(WS2812_SPI, s_bits, sizeof(s_bits)) != status_success) {
         s_busy = false;
-        return;
+        return false;
     }
 
     if (blocking) {
@@ -156,6 +156,8 @@ void ws2812_update(bool blocking)
             ;
         }
     }
+
+    return true;
 }
 
 bool ws2812_is_busy(void)
@@ -182,9 +184,11 @@ void ws2812_fill(uint8_t r, uint8_t g, uint8_t b)
     (void)b;
 }
 
-void ws2812_update(bool blocking)
+bool ws2812_update(bool blocking)
 {
     (void)blocking;
+
+    return true;
 }
 
 bool ws2812_is_busy(void)
