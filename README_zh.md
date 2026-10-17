@@ -28,6 +28,19 @@ gs_usb 协议与 candleLight 帧链表引擎来自上游 candleLight 源码；�
 | :---: | :---: | :---: |
 | ![HPM6800EVK](docs/images/hpm6800evk.png) | ![HPM6E00EVK](docs/images/hpm6e00evk.jpg) | ![HPM6P00EVK](docs/images/hpm6p00evk.jpg) |
 
+### Web 上位机（Web CAN Utils）
+
+[Web CAN Utils](https://zhangjiance.github.io/web-can-utils/) 是一个基于浏览器的
+GS_USB / Candlelight CAN / CAN-FD 监控与发送工具。它通过 WebUSB 直接访问适配器，
+无需安装驱动或原生应用；请使用 Chrome 或 Edge，并通过 HTTPS 或 `localhost`
+打开页面。
+
+源码仓库：[zhangjiance/web-can-utils](https://github.com/zhangjiance/web-can-utils.git)
+
+下图是 HSCanT 的四路通道以 500 kbit/s 仲裁速率、2 Mbit/s 数据速率运行 CAN-FD，并开启周期发送和调试日志时的界面。
+
+[![Web CAN Utils 连接 HSCanT](docs/images/web-can-utils-main.png)](https://zhangjiance.github.io/web-can-utils/)
+
 ## 设备标识
 
 | 项目 | 值 |

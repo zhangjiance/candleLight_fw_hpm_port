@@ -28,6 +28,20 @@ These EVK boards use their own board packages straight from hpm_sdk and are adap
 | :---: | :---: | :---: |
 | ![HPM6800EVK](docs/images/hpm6800evk.png) | ![HPM6E00EVK](docs/images/hpm6e00evk.jpg) | ![HPM6P00EVK](docs/images/hpm6p00evk.jpg) |
 
+### Web-based host (Web CAN Utils)
+
+[Web CAN Utils](https://zhangjiance.github.io/web-can-utils/) is a browser-based
+GS_USB / Candlelight CAN and CAN-FD monitor and transmitter. It reaches the
+adapter directly through WebUSB, so no driver or native application is needed;
+use Chrome or Edge and serve the page from HTTPS or `localhost`.
+
+Source repository: [zhangjiance/web-can-utils](https://github.com/zhangjiance/web-can-utils.git)
+
+The screenshot below shows four HSCanT channels running CAN-FD at 500 kbit/s
+arbitration / 2 Mbit/s data with periodic transmit tasks and the debug log enabled.
+
+[![Web CAN Utils connected to HSCanT](docs/images/web-can-utils-main.png)](https://zhangjiance.github.io/web-can-utils/)
+
 ## Device Identity
 
 | Item | Value |
