@@ -187,7 +187,7 @@ static const struct gs_device_config USBD_GS_CAN_dconf = {
 	.icount = NUM_CAN_CHANNEL - 1,
 	/* bump per release: major<<16 | minor<<8 | patch, the value CI checks
 	 * against the git tag (a host shows it as FW x.y.z) */
-	.sw_version = 0x000001,
+	.sw_version = 0x000002,
 	.hw_version = 1,
 };
 

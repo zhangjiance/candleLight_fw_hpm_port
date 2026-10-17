@@ -42,9 +42,20 @@ jobs:
       # report every preset, not just the first failure
       fail-fast: false
       matrix:
-        # one leg per board/image; debug presets are deliberately not built here
-        # hscant-lite and the hpm_sdk EVK boards are DFU-only (no UF2 presets)
-        preset: [hscant-dfu, hscant-uf2, hscant-lite-dfu, hpm5300evk-dfu]
+        # one leg per board/image; debug presets are deliberately not built here.
+        # hscant-lite and every hpm_sdk EVK are DFU-only (no UF2 presets), and
+        # each DFU .bin is published as a separate release asset.
+        preset:
+          - hscant-dfu
+          - hscant-uf2
+          - hscant-lite-dfu
+          - hpm5100evk-dfu
+          - hpm5300evk-dfu
+          - hpm5e00evk-dfu
+          - hpm6200evk-dfu
+          - hpm6800evk-dfu
+          - hpm6e00evk-dfu
+          - hpm6p00evk-dfu
     steps:
       - name: Check out (with the candleLight_fw submodule)
         uses: actions/checkout@v4
@@ -187,15 +198,31 @@ jobs:
       - name: Collect the release files
         run: |
           set -euo pipefail
-          # No archives, and no debug formats: the two flashable images exactly as
-          # the build emits them - the DFU image's raw .bin (dfu-util -D) and the
-          # UF2 image's .uf2 (drop it on the bootloader's MSC volume).  Note the
+          # No archives, and no debug formats: the flashable images exactly as the
+          # build emits them - each board's DFU raw .bin (dfu-util -D) plus the
+          # HSCanT UF2 image (drop it on the bootloader's MSC volume).  Note the
           # .bin of the uf2 preset is a different image, hence the explicit pick.
-          test -f "artifacts/hscant-dfu/candle_usb2canfd.bin"
+          # HSCanT keeps the historical plain name; the other boards are suffixed.
+          dfu_bins=(
+            "hscant-dfu:candle_usb2canfd.bin"
+            "hscant-lite-dfu:candle_usb2canfd-hscant-lite.bin"
+            "hpm5100evk-dfu:candle_usb2canfd-hpm5100evk.bin"
+            "hpm5300evk-dfu:candle_usb2canfd-hpm5300evk.bin"
+            "hpm5e00evk-dfu:candle_usb2canfd-hpm5e00evk.bin"
+            "hpm6200evk-dfu:candle_usb2canfd-hpm6200evk.bin"
+            "hpm6800evk-dfu:candle_usb2canfd-hpm6800evk.bin"
+            "hpm6e00evk-dfu:candle_usb2canfd-hpm6e00evk.bin"
+            "hpm6p00evk-dfu:candle_usb2canfd-hpm6p00evk.bin"
+          )
+          for item in "${dfu_bins[@]}"; do
+            src="artifacts/${item%%:*}/candle_usb2canfd.bin"
+            dst="${item#*:}"
+            test -f "${src}"
+            cp "${src}" "${dst}"
+          done
           test -f "artifacts/hscant-uf2/candle_usb2canfd.uf2"
-          cp artifacts/hscant-dfu/candle_usb2canfd.bin .
           cp artifacts/hscant-uf2/candle_usb2canfd.uf2 .
-          sha256sum candle_usb2canfd.bin candle_usb2canfd.uf2 > sha256sums.txt
+          sha256sum candle_usb2canfd*.bin candle_usb2canfd.uf2 > sha256sums.txt
           cat sha256sums.txt
 
       - name: Create the release
@@ -209,7 +236,7 @@ jobs:
           case "${TAG}" in
             *-rc*|*-beta*|*-alpha*) pre="--prerelease" ;;
           esac
-          files=(candle_usb2canfd.bin candle_usb2canfd.uf2 sha256sums.txt)
+          files=(candle_usb2canfd*.bin candle_usb2canfd.uf2 sha256sums.txt)
 
           # GitHub answers 5xx and timeouts from time to time; retry those
           # instead of failing a release that is otherwise fine.
