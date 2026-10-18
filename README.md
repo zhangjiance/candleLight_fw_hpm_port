@@ -297,8 +297,50 @@ candleLight_fw_hpm_port/
 
 The application is linked at `0x80020000` behind a `.dfu_signature`; the bootloader [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) lives at `0x80000000`.
 
-1. **First time** — write the bootloader with a debugger / flasher, then flash this application through DFU.
-2. **Application → bootloader** — hold the boot pin at power-on, long-press the user button for ~500 ms, or have the host issue a DFU `DETACH` request on the runtime interface. The application calls `dfu_run_bootloader()`, which writes a magic value to a retention register and re-enters the ROM boot flow; the bootloader sees the magic and stays in DFU mode.
+### First-time bootloader install (ISP)
+
+A blank or fully erased device has no second-stage bootloader yet. An HPM chip can enter ISP mode from the Boot ROM over **USB-HID or UART**, so you can write the [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) Boot Image into XPI0 NOR without a debugger -- provided the chip supports that ISP interface and the board exposes the required pins. The screenshots below are only UI illustrations.
+
+| Tool | Where to get it | Notes |
+| --- | --- | --- |
+| HPMicro official ISP tool | [hpmicro/hpm_manufacturing_tool](https://github.com/hpmicro/hpm_manufacturing_tool/releases) | HPMicro Programmer desktop app, USB-HID / UART, Windows / Linux |
+| Open-source web ISP | [Live demo](https://zhangjiance.github.io/web-hpm-isp/) · [Source](https://github.com/zhangjiance/web-hpm-isp) | Runs entirely in the browser over WebHID / Web Serial, no install |
+
+**Choosing the interface**
+
+- **USB-HID** needs no extra wiring, but is only available on some parts / packages. In the HPM53 family only the **100-pin package** supports USB-HID ISP.
+- **UART**: 48-pin HPM5300 devices use UART0 for ROM ISP, fixed to `PA00` (TXD) / `PA01` (RXD). HSCanT exposes these two pins, so you can hold the BOOT button while powering on to enter ISP and connect a 3.3 V USB-TTL adapter (TX/RX crossed, common GND). **HSCanT-Lite does not expose `PA00` / `PA01`, so ISP is unavailable; use JTAG / a debugger instead.**
+- For other families or packages, check the datasheet and board schematic for HID support and ISP pin availability.
+
+Both tools take the same parameters:
+
+| Parameter | Value |
+| --- | --- |
+| SoC | Select the actual part |
+| Interface | `USB-HID` or `UART` |
+| Serial port | UART mode: select the port and baud rate |
+| Image Type | `Boot Image` |
+| Memory Type | `XPI0 NOR` |
+| Boot Image | [`hpm-dfu-boot-<board>.bin`](https://github.com/zhangjiance/hpm_dfu_boot/releases) (`hpm-dfu-boot-hscant.bin` for HSCanT, `hpm-dfu-boot-hscant-lite.bin` for HSCanT-Lite) |
+| Program Address | `0x80000400` |
+| Flash configuration words | `0xfcf90002, 0x5, 0x1000, 0x0` |
+
+**Official tool**: open HPMicro Programmer, select the actual SoC, and set Type to `USB-HID` or `UART` (use UART, with the matching serial port and baud rate, for HSCanT; HSCanT-Lite has no ISP and must use JTAG). Then set Image Type to **Boot Image**, Memory Type to **XPI0 NOR**, Program Address to `0x80000400`, load the image, and click **Program**. The tool parses the Flash configuration block, boot header, and write address from the image.
+
+[![HPMicro official ISP tool](docs/images/hpm_manufacturing_gui.png)](docs/images/hpm_manufacturing_gui.png)
+
+*The screenshot is only a UI illustration; select UART for HSCanT. HSCanT-Lite can only be flashed over JTAG.*
+
+**Open-source web tool**: open the [live demo](https://zhangjiance.github.io/web-hpm-isp/) in desktop Chrome / Edge, select the actual SoC and `USB-HID` or `UART` (plus a baud rate for UART), then click **Connect**. In HID mode the page loads `bl_fw` into RAM on the first connection, so the device re-enumerates from `Boot ROM Open` to `Boot Firmware Open`; re-authorize WebHID for `0x34b7:0x0005` in the browser dialog. In UART mode the page loads `bl_fw` at connection time and falls back to 115200 if the selected baud rate does not answer. Then choose `Boot Image`, confirm the write address and configuration words, load the image, and click **Program**.
+
+[![HPM ISP Flasher](docs/images/hpm_web_isp_tool.png)](https://zhangjiance.github.io/web-hpm-isp/)
+
+*This screenshot is also only a UI illustration; pick the SoC and interface for your chip / board.*
+
+> HSCanT and HSCanT-Lite are both 48-pin packages, and ROM ISP uses UART0 on `PA00` / `PA01`. HSCanT exposes these pins: hold the BOOT button (PA03, reused as the user button by the application) while powering on to enter ROM ISP, even when valid firmware is already present. HSCanT-Lite does not expose `PA00` / `PA01`, so it cannot use ISP and must be flashed over JTAG / with a debugger. On other boards, set BOOT_MODE to ISP / Serial Boot as described by the board (for example, DIP bit2 = ON and bit1 = OFF is ISP on the HPM5300EVK).
+
+1. **First time** — on HSCanT, install the bootloader over ISP as described above; on HSCanT-Lite, write it over JTAG. Then flash this application through DFU.
+2. **Application → bootloader** — long-press the user button for ~500 ms while the application is running, or have the host issue a DFU `DETACH` request on the runtime interface. The application calls `dfu_run_bootloader()`, which writes a magic value to a retention register and re-enters the ROM boot flow; the bootloader sees the magic and stays in DFU mode.
 3. **Download** — the bootloader enumerates under the HPMicro VID (`0x34b7`).
 
 Both the bootloader and the application are driver-less on Windows via WCID, so no Zadig and no vendor INF are needed:

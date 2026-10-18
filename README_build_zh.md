@@ -172,7 +172,7 @@ cmake -B build/myevk -G Ninja -DBOARD=hpm6e00evk \
 
 EVK 在本工程中**只使用 DFU**（不生成 UF2）：本工程唯一兼容的 UF2 boot 是 HSCanT 的闭源 boot，其它板卡需要先自行实现配套的 UF2 boot 工程（见 [3.3](#33-两种镜像形态)）。HPM6300EVK、HPM6750EVK2、HPM6750EVKMINI **不支持**：它们的 CAN 控制器是老的 bxCAN IP，不是 MCAN，配置阶段会直接给出说明并终止。
 
-> **HSCanT-Lite** 的 `BOARD_hscant_lite` 分支与板级包已就位，`hscant-lite-dfu` / `hscant-lite-dfu-debug` preset 可正常构建。该板同样只使用 **DFU**。4 路 CAN、8 颗 GPIO 指示灯（每通道状态灯 + 错误灯）和 PA03 BOOT 按键的实机功能仍建议上板验证。
+> **HSCanT-Lite** 的 `BOARD_hscant_lite` 分支与板级包已就位，`hscant-lite-dfu` / `hscant-lite-dfu-debug` preset 可正常构建。该板同样只使用 **DFU** 镜像（首次 bootloader 需 JTAG 写入，因为 ISP UART 未引出）。4 路 CAN、8 颗 GPIO 指示灯（每通道状态灯 + 错误灯）和 PA03 BOOT 按键的实机功能仍建议上板验证。
 
 ### 3.3 两种镜像形态
 
@@ -269,8 +269,8 @@ cmake --build build/manual -j8
 
 ## 7. 烧录与验证
 
-1. 用调试器把 bootloader（[`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git)）烧到 `0x80000000`。
-2. 进入 DFU 模式：上电时按住 Boot 引脚，或让运行中的 APP 主动 detach。
+1. 写入 bootloader（[`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git)）：HSCanT 可直接走 ISP；HSCanT-Lite 未引出 ISP UART，只能用 JTAG / 调试器写入。步骤见 [README_zh.md 的首次烧录 bootloader（ISP）](./README_zh.md#首次烧录-bootloaderisp)。
+2. 进入 DFU 模式：在 APP 运行时长按用户按键约 500 ms，或让运行中的 APP 主动 detach。
 3. 写入应用程序：
 
 ```bash

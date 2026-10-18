@@ -288,8 +288,50 @@ candleLight_fw_hpm_port/
 
 本 APP 链接在 `0x80020000`，其前放置 `.dfu_signature`；引导程序 [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 位于 `0x80000000`。
 
-1. **首次** —— 用调试器 / 烧录器写入 bootloader，之后通过 DFU 烧录本 APP。
-2. **APP → bootloader** —— 上电时按住 Boot 引脚、长按用户按键约 500 ms，或由主机在 runtime 接口上发出 DFU `DETACH` 请求。APP 调用 `dfu_run_bootloader()`：向保留寄存器写入 magic 后重新进入 ROM 引导流程，bootloader 读到该 magic 便停留在 DFU 模式。
+### 首次烧录 bootloader（ISP）
+
+第一次使用或 Flash 被整片擦除后，片上还没有二级引导程序。HPM 芯片可以从 Boot ROM 进入 ISP 模式（USB-HID 或 UART），无需调试器即可把 [`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git) 的 Boot Image 写入 XPI0 NOR；前提是芯片支持对应 ISP 接口，且板卡把相关引脚引出。下面的截图仅作界面示意。
+
+| 工具 | 获取方式 | 说明 |
+| --- | --- | --- |
+| HPMicro 官方 ISP 工具 | [hpmicro/hpm_manufacturing_tool](https://github.com/hpmicro/hpm_manufacturing_tool/releases) | HPMicro Programmer 桌面程序，支持 USB-HID / UART，Windows / Linux |
+| 开源 Web ISP | [在线演示](https://zhangjiance.github.io/web-hpm-isp/) · [源码](https://github.com/zhangjiance/web-hpm-isp) | 纯浏览器实现，支持 WebHID / Web Serial，无需安装软件 |
+
+**接口选择**
+
+- **USB-HID**：无需额外接线，但只有部分型号 / 封装支持。HPM53 系列中仅 **100-pin 封装**提供 USB-HID ISP。
+- **UART**：48-pin 的 HPM5300 系列使用 UART0 作为 ROM ISP，固定映射到 `PA00`（TXD）/ `PA01`（RXD）。HSCanT 引出了这两个引脚，可以按住 BOOT 按键上电进入 ISP，再连接 3.3V USB-TTL（TX/RX 交叉、共地）烧录。**HSCanT-Lite 未引出 `PA00` / `PA01`，无法使用 ISP，只能用 JTAG / 调试器烧录**。
+- 其它系列或封装是否支持 HID、以及 ISP 引脚是否可用，以芯片数据手册和板卡原理图为准。
+
+两种工具使用同一组参数：
+
+| 参数 | 值 |
+| --- | --- |
+| SoC | 按实际芯片选择 |
+| 接口 | `USB-HID` 或 `UART` |
+| 串口 | UART 模式选择对应串口与波特率 |
+| Image Type | `Boot Image` |
+| Memory Type | `XPI0 NOR` |
+| Boot Image | [`hpm-dfu-boot-<board>.bin`](https://github.com/zhangjiance/hpm_dfu_boot/releases)（HSCanT 用 `hpm-dfu-boot-hscant.bin`，HSCanT-Lite 用 `hpm-dfu-boot-hscant-lite.bin`） |
+| Program Address | `0x80000400` |
+| Flash 配置字 | `0xfcf90002, 0x5, 0x1000, 0x0` |
+
+**官方工具**：打开 HPMicro Programmer，先按实际芯片选择 SoC；Type 选 `USB-HID` 或 `UART`（HSCanT 选 UART，并选择对应串口与波特率；HSCanT-Lite 不支持 ISP，请用 JTAG）。然后 Image Type 选 **Boot Image**，Memory Type 选 **XPI0 NOR**，Program Address 填 `0x80000400`，加载镜像后点 **Program**。工具会自动解析镜像中的 Flash 配置块、Boot Header 与写入地址。
+
+[![HPMicro 官方 ISP 工具](docs/images/hpm_manufacturing_gui.png)](docs/images/hpm_manufacturing_gui.png)
+
+*截图仅作界面示意；HSCanT 请选择 UART。HSCanT-Lite 只能用 JTAG 烧录。*
+
+**开源 Web 工具**：用桌面版 Chrome / Edge 打开[演示页](https://zhangjiance.github.io/web-hpm-isp/)，选择实际 SoC 与 `USB-HID` 或 `UART`（UART 还需选择波特率）后点 **Connect**。HID 模式下，首次连接时页面会先把 `bl_fw` 载入 RAM，设备会从 `Boot ROM Open` 重新枚举为 `Boot Firmware Open`；在浏览器的 WebHID 授权弹窗中重新选择 `0x34b7:0x0005` 即可。UART 模式下页面会在连接时装载 `bl_fw`，若所选波特率无响应会自动回退到 115200。随后选择 `Boot Image`、确认写入地址与配置字，加载镜像并点 **Program**。
+
+[![HPM ISP Flasher](docs/images/hpm_web_isp_tool.png)](https://zhangjiance.github.io/web-hpm-isp/)
+
+*截图同样仅作界面示意；SoC 与接口按实际芯片 / 板卡选择。*
+
+> HSCanT 与 HSCanT-Lite 都是 48-pin 封装，ROM ISP 的 UART0 固定在 `PA00` / `PA01`。HSCanT 已引出这两个引脚，按住 BOOT 按键（PA03，APP 运行时复用为用户按键）上电即可进入 ROM ISP，即使 Flash 中已有固件也不需要先擦除。HSCanT-Lite 未引出 `PA00` / `PA01`，无法使用 ISP，只能用 JTAG / 调试器烧录。其它板卡可将 BOOT_MODE 置为 ISP / Serial Boot（例如 HPM5300EVK 的 DIP 开关 bit2 = ON、bit1 = OFF 即 ISP）。
+
+1. **首次** —— HSCanT 按上一节通过 ISP 写入 bootloader，HSCanT-Lite 用 JTAG 写入；之后通过 DFU 烧录本 APP。
+2. **APP → bootloader** —— 在 APP 运行时长按用户按键约 500 ms，或由主机在 runtime 接口上发出 DFU `DETACH` 请求。APP 调用 `dfu_run_bootloader()`：向保留寄存器写入 magic 后重新进入 ROM 引导流程，bootloader 读到该 magic 便停留在 DFU 模式。
 3. **下载** —— bootloader 以 HPMicro 的 VID（`0x34b7`）枚举。
 
 bootloader 与 APP 在 Windows 下都通过 WCID 免驱，无需 Zadig、无需厂商 INF：

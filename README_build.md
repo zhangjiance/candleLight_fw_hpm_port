@@ -174,7 +174,7 @@ cmake -B build/myevk -G Ninja -DBOARD=hpm6e00evk \
 
 EVKs are **DFU-only** here (no UF2 images): the only UF2 boot this project is compatible with is HSCanT's closed-source one, so another board would need its own UF2 boot project first (see [3.3](#33-boot-image-flavours)). HPM6300EVK, HPM6750EVK2 and HPM6750EVKMINI are **not** supported: their CAN controller is the older bxCAN IP, not MCAN; configure stops with an explanatory error.
 
-> **HSCanT-Lite** has both the `BOARD_hscant_lite` config block and its own board package, and its `hscant-lite-dfu` / `hscant-lite-dfu-debug` presets build. It is **DFU-only** too. The four CAN channels, the eight GPIO LEDs (one status plus one error LED per channel) and the PA03 BOOT button should still be validated on hardware.
+> **HSCanT-Lite** has both the `BOARD_hscant_lite` config block and its own board package, and its `hscant-lite-dfu` / `hscant-lite-dfu-debug` presets build. It is **DFU-only** for the application image too (the first bootloader install needs JTAG because its ISP UART is not exposed). The four CAN channels, the eight GPIO LEDs (one status plus one error LED per channel) and the PA03 BOOT button should still be validated on hardware.
 
 ### 3.3 Boot image flavours
 
@@ -275,8 +275,8 @@ Nothing in `port/` or `src/` has to change.
 
 ## 7. Flashing and Verifying
 
-1. Flash the bootloader ([`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git)) with a debugger to `0x80000000`.
-2. Enter DFU mode: hold the boot pin at power-on, or ask the running application to detach.
+1. Install the bootloader ([`hpm_dfu_boot`](https://github.com/zhangjiance/hpm_dfu_boot.git)): use ISP on HSCanT, or JTAG / a debugger on HSCanT-Lite (its ISP UART is not exposed); see [First-time bootloader install (ISP)](./README.md#first-time-bootloader-install-isp) in the main README.
+2. Enter DFU mode: long-press the user button for ~500 ms while the application is running, or ask the running application to detach.
 3. Write the application:
 
 ```bash
