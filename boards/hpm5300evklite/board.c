@@ -368,6 +368,20 @@ void init_can_pins(MCAN_Type *ptr)
     }
 }
 
+uint32_t board_init_can_clock(MCAN_Type *ptr)
+{
+    /* clock.c (init_board_clock_source) already sources clk_canX from
+     * clk_src_pll1_clk0 / 10 = 80 MHz; re-asserting it here keeps the board
+     * contract self-contained and gives the MCAN driver the same frequency. */
+    if (ptr == HPM_MCAN2) {
+        clock_add_to_group(clock_can2, 0);
+        clock_set_source_divider(clock_can2, clk_src_pll1_clk0, 10);
+        return clock_get_frequency(clock_can2);
+    }
+
+    return 0;
+}
+
 void init_led_pins(void)
 {
     init_led0_pins();

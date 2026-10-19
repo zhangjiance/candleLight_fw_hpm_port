@@ -193,6 +193,7 @@ void board_delay_us(uint32_t us);
 void board_delay_ms(uint32_t ms);
 void board_timer_create(uint32_t ms, board_timer_cb cb);
 void board_ungate_mchtmr_at_lp_mode(void);
+uint32_t board_init_can_clock(MCAN_Type *ptr);
 
 uint8_t board_get_led_gpio_off_level(void);
 

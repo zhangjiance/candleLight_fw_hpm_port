@@ -266,7 +266,7 @@ Nothing in `port/` or `src/` has to change.
 **For a board with its own package** (a custom board, or a non-EVK design):
 
 1. Create `boards/<name>/` with at least `board.h`, `board.c` and `pinmux.c`. The required macros and functions are listed and enforced in **`port/board_contract.h`** (`BOARD_CAN_COUNT`, `BOARD_CAN_INSTANCES`, `BOARD_USB_BASE`, `BOARD_USB_IRQn`, `BOARD_HAS_SYS_LED`, `BOARD_BGPR` on BCFG SoCs, and `board_init()` / `board_init_usb()` / `board_delay_ms()` / `init_can_pins()`). `board_init_can_clock()` is provided by the board package.
-2. Add a `BOARD_<name>` block to `candleLight_fw/include/config.h` — USB strings, `NUM_CAN_CHANNEL`, `CAN_CLOCK_SPEED`, `CONFIG_CANFD` (and `CONFIG_TERMINATION` + `TERM_Pin` if the board really has a switchable terminator).
+2. Add a `BOARD_<name>` block to `candleLight_fw/include/config.h` — USB strings, `NUM_CAN_CHANNEL`, `CAN_CLOCK_SPEED`, `CONFIG_CANFD` (and `CONFIG_TERMINATION` + `TERM_Pin` if the board really has a switchable terminator). **Skip this step for a single-channel, EVK-style board**: when `config.h` has no `BOARD_<name>` block, `CMakeLists.txt` compiles it as `BOARD_hpmicro_evk` (one MCAN channel, CANFD, 80 MHz CAN clock, `"<BOARD_NAME> USB2CANFD gs_usb"` strings), so the submodule stays untouched.
 3. Add a preset in `CMakePresets.json` with `-DBOARD=<name>`.
 
 `BOARD_CAN_COUNT` and `NUM_CAN_CHANNEL` should agree.

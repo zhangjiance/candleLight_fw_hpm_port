@@ -92,7 +92,14 @@ project(candle_usb2canfd)
 # Board package resolution
 #
 #   boards/<BOARD>/  - a board package that lives in this repository
-#                      (hscant, hscant-lite): keep using it.
+#                      (hscant, hscant-lite, hpm5300evklite): keep using it.
+#                      Its board package supplies the port contract, so the
+#                      candle selector is normally BOARD_<BOARD>.  A package
+#                      without a BOARD_<BOARD> block in candleLight's config.h
+#                      is a single-channel EVK-style board and falls back to
+#                      the generic BOARD_hpmicro_evk profile (one MCAN channel,
+#                      CANFD, 80 MHz CAN clock, "<BOARD_NAME> ..." USB
+#                      strings) - no config.h change needed.
 #
 #   otherwise BOARD must name an EVK in ${HPM_SDK_BASE}/boards.  The SDK owns
 #   that board package; this project only adds the candle bindings through
@@ -104,9 +111,20 @@ project(candle_usb2canfd)
 set(HPMICRO_EVK OFF)
 set(HPMICRO_EVK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/boards/hpmicro_evk)
 set(CANDLE_BOARD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD})
+string(REPLACE "-" "_" CANDLE_BOARD_MACRO "${BOARD}")
 
 if(EXISTS ${CANDLE_BOARD_DIR}/${BOARD}.yaml)
     message(STATUS "Board package: ${BOARD} (in this repository)")
+
+    # Prefer a dedicated board block in candleLight's config.h (USB strings,
+    # channel count, CAN clock, ...).  Without one the board is treated as a
+    # single-channel EVK-style package and shares BOARD_hpmicro_evk.
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/candleLight_fw/include/config.h CANDLE_CONFIG_H)
+    if(NOT CANDLE_CONFIG_H MATCHES "defined\\(BOARD_${CANDLE_BOARD_MACRO}\\)")
+        message(STATUS "  no BOARD_${CANDLE_BOARD_MACRO} block in candleLight_fw/include/config.h: "
+                       "using BOARD_hpmicro_evk (single MCAN channel, CANFD, 80 MHz CAN clock)")
+        set(CANDLE_BOARD_MACRO hpmicro_evk)
+    endif()
 else()
     set(SDK_EVK_DIR $ENV{HPM_SDK_BASE}/boards/${BOARD})
     if(NOT EXISTS ${SDK_EVK_DIR}/${BOARD}.yaml)
@@ -129,6 +147,7 @@ else()
     endif()
 
     set(HPMICRO_EVK ON)
+    set(CANDLE_BOARD_MACRO hpmicro_evk)
     set(CANDLE_BOARD_DIR ${HPMICRO_EVK_DIR})
     message(STATUS "Board package: ${BOARD} (hpm_sdk EVK, candle bindings in boards/hpmicro_evk)")
 endif()
@@ -239,16 +258,10 @@ sdk_inc(${CANDLE_FW}/libs/STM32_USB_Device_Library/config)
 # '-' in the board name becomes '_': -DBOARD=hscant-lite selects the
 # BOARD_hscant_lite block.
 #
-# Every hpm_sdk EVK shares one candle board block, BOARD_hpmicro_evk: BOARD is
-# the SDK board name (used to pick the board package and its YAML), while the
-# application is always built as an HPMicro EVK.
-if(HPMICRO_EVK)
-    sdk_compile_definitions(-DBOARD_hpmicro_evk -DSTM32G4 -DCONFIG_M_CAN)
-    # Bindings come from app_preinclude.h.
-else()
-    string(REPLACE "-" "_" BOARD_MACRO "${BOARD}")
-    sdk_compile_definitions(-DBOARD_${BOARD_MACRO} -DSTM32G4 -DCONFIG_M_CAN)
-endif()
+# Single-channel EVK-style boards (hpm_sdk EVKs and in-repository packages
+# without their own block) share BOARD_hpmicro_evk: BOARD names the board
+# package, CANDLE_BOARD_MACRO is the candle selector picked above.
+sdk_compile_definitions(-DBOARD_${CANDLE_BOARD_MACRO} -DSTM32G4 -DCONFIG_M_CAN)
 
 # ---------------------------------------------------------------------------
 # Sources

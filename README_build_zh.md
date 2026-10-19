@@ -260,7 +260,7 @@ cmake --build build/manual -j8
 **对于需要自带板级包的板子**（自定义板或非 EVK 设计）：
 
 1. 新建 `boards/<name>/`，至少包含 `board.h`、`board.c`、`pinmux.c`。所需宏与函数在 **`port/board_contract.h`** 中列出并在编译期强制检查（`BOARD_CAN_COUNT`、`BOARD_CAN_INSTANCES`、`BOARD_USB_BASE`、`BOARD_USB_IRQn`、`BOARD_HAS_SYS_LED`，BCFG 类 SoC 还需要 `BOARD_BGPR`，以及 `board_init()` / `board_init_usb()` / `board_delay_ms()` / `init_can_pins()`）。`board_init_can_clock()` 由板级包提供。
-2. 在 `candleLight_fw/include/config.h` 中增加 `BOARD_<name>` 块 —— USB 字符串、`NUM_CAN_CHANNEL`、`CAN_CLOCK_SPEED`、`CONFIG_CANFD`（若该板确实有可切换的终端电阻，再加 `CONFIG_TERMINATION` 和 `TERM_Pin`）。
+2. 在 `candleLight_fw/include/config.h` 中增加 `BOARD_<name>` 块 —— USB 字符串、`NUM_CAN_CHANNEL`、`CAN_CLOCK_SPEED`、`CONFIG_CANFD`（若该板确实有可切换的终端电阻，再加 `CONFIG_TERMINATION` 和 `TERM_Pin`）。**单通道、EVK 风格的板子可以跳过这一步**：`config.h` 中没有 `BOARD_<name>` 块时，`CMakeLists.txt` 会按 `BOARD_hpmicro_evk` 编译（单路 MCAN、CANFD、80 MHz CAN 时钟、`"<BOARD_NAME> USB2CANFD gs_usb"` 字符串），子仓保持不动。
 3. 在 `CMakePresets.json` 中增加一个带 `-DBOARD=<name>` 的预设。
 
 `BOARD_CAN_COUNT` 与 `NUM_CAN_CHANNEL` 应保持一致。
