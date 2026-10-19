@@ -1,0 +1,164 @@
+{
+  "clientKey": "45b56b59dac69b58ef681dae7b3ea809",
+  "secretKey": "9302310a3a09a4657e8fe8e02ed847c8",
+  "content": {
+    "pid": "1e9a8e86-2851-4be2-a253-f2b61ea2adea",
+    "info": {
+      "projectName": "hpm5300evklite.hpmpc",
+      "sdkName": "1.13.0",
+      "socName": "HPM5361",
+      "packageName": "QFN48",
+      "createTime": 1791199621726,
+      "updateTime": 1791201258673,
+      "vscodePid": "62f8974d-6308-42d7-981b-f14c36b7a43d"
+    },
+    "pinmux": {
+      "functions": {
+        "init_gpio_pins": {
+          "selectPins": {
+            "PA03": {
+              "signal": "GPIO.A.A[03]",
+              "padCtls": {}
+            }
+          },
+          "managers": {
+            "gpiom": {
+              "PA03": {
+                "direction": "0",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]"
+              }
+            }
+          }
+        },
+        "init_led0_pins": {
+          "selectPins": {
+            "PA08": {
+              "signal": "GPIO.A.A[08]",
+              "padCtls": {}
+            }
+          },
+          "managers": {
+            "gpiom": {
+              "PA08": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "1"
+              }
+            }
+          }
+        },
+        "init_led1_pins": {
+          "selectPins": {
+            "PA09": {
+              "signal": "GPIO.A.A[09]",
+              "padCtls": {}
+            }
+          },
+          "managers": {
+            "gpiom": {
+              "PA09": {
+                "direction": "1",
+                "gpioController": "2",
+                "gpioControllerHide": "[\"1\"]",
+                "outputLevel": "0"
+              }
+            }
+          }
+        },
+        "init_mcan2_pins": {
+          "selectPins": {
+            "PY01": {
+              "signal": "MCAN2.D.RXD",
+              "padCtls": {}
+            },
+            "PY00": {
+              "signal": "MCAN2.D.TXD",
+              "padCtls": {}
+            }
+          }
+        },
+        "init_uart0_pins": {
+          "selectPins": {
+            "PA01": {
+              "signal": "UART0.A.RXD",
+              "padCtls": {}
+            },
+            "PA00": {
+              "signal": "UART0.A.TXD",
+              "padCtls": {}
+            }
+          }
+        },
+        "init_usb0_pins": {
+          "selectPins": {
+            "PA25": {
+              "signal": "USBPHY.A.USB_DM",
+              "padCtls": {}
+            },
+            "PA24": {
+              "signal": "USBPHY.A.USB_DP",
+              "padCtls": {}
+            }
+          }
+        }
+      },
+      "alias": {
+        "PA08": "LED0",
+        "PA09": "LED1",
+        "PA03": "USER_BTN"
+      },
+      "sorter": [
+        "init_led0_pins",
+        "init_led1_pins",
+        "init_gpio_pins",
+        "init_uart0_pins",
+        "init_mcan2_pins",
+        "init_usb0_pins"
+      ]
+    },
+    "clock": {
+      "functions": {
+        "init_board_clock": {
+          "selectClocks": {
+            "srcClocks": [
+              "osc32k",
+              "osc24m",
+              "clk0_pll0",
+              "clk1_pll0",
+              "clk2_pll0",
+              "clk0_pll1",
+              "clk1_pll1",
+              "clk2_pll1",
+              "clk3_pll1"
+            ],
+            "funcClocks": [],
+            "selfOnlyFuncClocks": []
+          },
+          "enableClocks": {
+            "clk_top_cpu0": "0"
+          },
+          "pllClkConfig": {
+            "pll0": {
+              "params": {
+                "mfd": 240000000,
+                "mfi": 40,
+                "mfn": 0,
+                "frequency": 960000000
+              }
+            }
+          },
+          "srcClkConfig": {
+            "clk0_pll0": {
+              "divFactor": 0
+            }
+          }
+        }
+      },
+      "sorter": [
+        "init_board_clock"
+      ]
+    }
+  }
+}
