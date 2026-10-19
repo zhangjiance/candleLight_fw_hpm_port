@@ -52,7 +52,6 @@ jobs:
           - hpm5100evk-dfu
           - hpm5300evk-dfu
           - hpm5e00evk-dfu
-          - hpm6200evk-dfu
           - hpm6800evk-dfu
           - hpm6e00evk-dfu
           - hpm6p00evk-dfu
@@ -213,7 +212,6 @@ jobs:
             hpm5100evk-dfu
             hpm5300evk-dfu
             hpm5e00evk-dfu
-            hpm6200evk-dfu
             hpm6800evk-dfu
             hpm6e00evk-dfu
             hpm6p00evk-dfu
