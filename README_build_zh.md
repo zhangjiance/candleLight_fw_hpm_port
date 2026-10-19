@@ -155,7 +155,6 @@ EVK 的板级包**不会复制进本仓库**：`BOARD` 直接选中 `$HPM_SDK_BA
 | HPM5100EVK | `hpm5100evk` | MCAN0 |
 | HPM5300EVK | `hpm5300evk` | MCAN3 |
 | HPM5E00EVK | `hpm5e00evk` | MCAN1 |
-| HPM6200EVK | `hpm6200evk` | MCAN0 |
 | HPM6800EVK | `hpm6800evk` | MCAN3 |
 | HPM6E00EVK | `hpm6e00evk` | MCAN4 |
 | HPM6P00EVK | `hpm6p00evk` | MCAN1 |
@@ -171,6 +170,8 @@ cmake -B build/myevk -G Ninja -DBOARD=hpm6e00evk \
 ```
 
 EVK 在本工程中**只使用 DFU**（不生成 UF2）：本工程唯一兼容的 UF2 boot 是 HSCanT 的闭源 boot，其它板卡需要先自行实现配套的 UF2 boot 工程（见 [3.3](#33-两种镜像形态)）。HPM6300EVK、HPM6750EVK2、HPM6750EVKMINI **不支持**：它们的 CAN 控制器是老的 bxCAN IP，不是 MCAN，配置阶段会直接给出说明并终止。
+
+**HPM6200EVK（HPM6280）不支持，也不提供 preset。** HPM6200 系列存在勘误 **E00028**：CPUCore 与 MCAN 同时访问消息存储器时可能造成 MCAN 数据异常，规避方法要求在 `PSR[ACT]` 为空闲时才填写 TX FIFO/buffer、触发发送以及从 RX FIFO/BUF 读消息。本固件每帧都会访问消息存储器（读 RX FIFO、写 TX FIFO 元素），既没有停总线也没有对这些访问加门控，而该勘误要到芯片版本 3.0 才修正。由于无法假定手上的 EVK 一定是 V3 芯片，因此该板不纳入支持。
 
 > **HSCanT-Lite** 的 `BOARD_hscant_lite` 分支与板级包已就位，`hscant-lite-dfu` / `hscant-lite-dfu-debug` preset 可正常构建。该板同样只使用 **DFU** 镜像（首次 bootloader 需 JTAG 写入，因为 ISP UART 未引出）。4 路 CAN、8 颗 GPIO 指示灯（每通道状态灯 + 错误灯）和 PA03 BOOT 按键的实机功能仍建议上板验证。
 

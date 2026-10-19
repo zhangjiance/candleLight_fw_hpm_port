@@ -157,7 +157,6 @@ The EVK board packages are **not copied into this repository**: `BOARD` selects 
 | HPM5100EVK | `hpm5100evk` | MCAN0 |
 | HPM5300EVK | `hpm5300evk` | MCAN3 |
 | HPM5E00EVK | `hpm5e00evk` | MCAN1 |
-| HPM6200EVK | `hpm6200evk` | MCAN0 |
 | HPM6800EVK | `hpm6800evk` | MCAN3 |
 | HPM6E00EVK | `hpm6e00evk` | MCAN4 |
 | HPM6P00EVK | `hpm6p00evk` | MCAN1 |
@@ -173,6 +172,8 @@ cmake -B build/myevk -G Ninja -DBOARD=hpm6e00evk \
 ```
 
 EVKs are **DFU-only** here (no UF2 images): the only UF2 boot this project is compatible with is HSCanT's closed-source one, so another board would need its own UF2 boot project first (see [3.3](#33-boot-image-flavours)). HPM6300EVK, HPM6750EVK2 and HPM6750EVKMINI are **not** supported: their CAN controller is the older bxCAN IP, not MCAN; configure stops with an explanatory error.
+
+**HPM6200EVK (HPM6280) is not supported and has no preset.** The HPM6200 series carries erratum **E00028** — the MCAN message RAM can be corrupted when the CPU core accesses it while the controller is active, and the workaround requires the CPU to only touch TX FIFO/buffer and RX FIFO/BUF while `PSR[ACT]` reads idle. This firmware touches the message RAM on every frame (RX FIFO read, TX FIFO element write), the device neither stops the bus nor gates those accesses, and the erratum is only fixed in silicon revision 3.0 or later. Since the revision of a given EVK cannot be assumed, the board is left out.
 
 > **HSCanT-Lite** has both the `BOARD_hscant_lite` config block and its own board package, and its `hscant-lite-dfu` / `hscant-lite-dfu-debug` presets build. It is **DFU-only** for the application image too (the first bootloader install needs JTAG because its ISP UART is not exposed). The four CAN channels, the eight GPIO LEDs (one status plus one error LED per channel) and the PA03 BOOT button should still be validated on hardware.
 

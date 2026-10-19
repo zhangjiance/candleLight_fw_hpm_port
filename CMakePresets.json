@@ -170,24 +170,6 @@
             "binaryDir": "${sourceDir}/build/hpm5e00evk-dfu-debug"
         },
         {
-            "name": "hpm6200evk-dfu",
-            "displayName": "HPM6200EVK - DFU image (Release)",
-            "inherits": "base",
-            "cacheVariables": {
-                "BOARD": "hpm6200evk"
-            },
-            "binaryDir": "${sourceDir}/build/hpm6200evk-dfu"
-        },
-        {
-            "name": "hpm6200evk-dfu-debug",
-            "displayName": "HPM6200EVK - DFU image (Debug)",
-            "inherits": "base-debug",
-            "cacheVariables": {
-                "BOARD": "hpm6200evk"
-            },
-            "binaryDir": "${sourceDir}/build/hpm6200evk-dfu-debug"
-        },
-        {
             "name": "hpm6800evk-dfu",
             "displayName": "HPM6800EVK - DFU image (Release)",
             "inherits": "base",
@@ -325,18 +307,6 @@
             "name": "hpm5e00evk-dfu-debug",
             "displayName": "Build HPM5E00EVK - DFU image (Debug)",
             "configurePreset": "hpm5e00evk-dfu-debug",
-            "jobs": 8
-        },
-        {
-            "name": "hpm6200evk-dfu",
-            "displayName": "Build HPM6200EVK - DFU image (Release)",
-            "configurePreset": "hpm6200evk-dfu",
-            "jobs": 8
-        },
-        {
-            "name": "hpm6200evk-dfu-debug",
-            "displayName": "Build HPM6200EVK - DFU image (Debug)",
-            "configurePreset": "hpm6200evk-dfu-debug",
             "jobs": 8
         },
         {

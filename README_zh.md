@@ -20,9 +20,9 @@ gs_usb 协议与 candleLight 帧链表引擎来自上游 candleLight 源码；�
 
 这些 EVK 直接使用 hpm_sdk 自带的板级包，适配为单通道 candle 设备（仅 DFU）：
 
-| HPM5100EVK | HPM5300EVK | HPM5E00EVK | HPM6200EVK |
-| :---: | :---: | :---: | :---: |
-| ![HPM5100EVK](docs/images/hpm5100evk.jpg) | ![HPM5300EVK](docs/images/hpm5300evk.png) | ![HPM5E00EVK](docs/images/hpm5e00evk.jpg) | ![HPM6200EVK](docs/images/hpm6200evk.jpg) |
+| HPM5100EVK | HPM5300EVK | HPM5E00EVK |
+| :---: | :---: | :---: |
+| ![HPM5100EVK](docs/images/hpm5100evk.jpg) | ![HPM5300EVK](docs/images/hpm5300evk.png) | ![HPM5E00EVK](docs/images/hpm5e00evk.jpg) |
 
 | HPM6800EVK | HPM6E00EVK | HPM6P00EVK |
 | :---: | :---: | :---: |

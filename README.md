@@ -20,9 +20,9 @@ The gs_usb protocol and candleLight's frame linked-list engine are the upstream 
 
 These EVK boards use their own board packages straight from hpm_sdk and are adapted as single-channel candle devices (DFU only):
 
-| HPM5100EVK | HPM5300EVK | HPM5E00EVK | HPM6200EVK |
-| :---: | :---: | :---: | :---: |
-| ![HPM5100EVK](docs/images/hpm5100evk.jpg) | ![HPM5300EVK](docs/images/hpm5300evk.png) | ![HPM5E00EVK](docs/images/hpm5e00evk.jpg) | ![HPM6200EVK](docs/images/hpm6200evk.jpg) |
+| HPM5100EVK | HPM5300EVK | HPM5E00EVK |
+| :---: | :---: | :---: |
+| ![HPM5100EVK](docs/images/hpm5100evk.jpg) | ![HPM5300EVK](docs/images/hpm5300evk.png) | ![HPM5E00EVK](docs/images/hpm5e00evk.jpg) |
 
 | HPM6800EVK | HPM6E00EVK | HPM6P00EVK |
 | :---: | :---: | :---: |
