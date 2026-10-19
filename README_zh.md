@@ -10,11 +10,11 @@ gs_usb 协议与 candleLight 帧链表引擎来自上游 candleLight 源码；�
 
 ## 硬件
 
-### HSCanT / HSCanT-Lite
+### HSCanT / HSCanT-Lite / HPM5300EVK-Lite
 
-| HSCanT | HSCanT-Lite |
-| :---: | :---: |
-| [![HSCanT](docs/images/hscant.png)](https://github.com/cherry-embedded/HSCanT-hardware) | [![HSCanT-Lite](docs/images/hscant-lite.jpg)](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) |
+| HSCanT | HSCanT-Lite | HPM5300EVK-Lite |
+| :---: | :---: | :---: |
+| [<img src="boards/hscant/hscant.png" width="220" alt="HSCanT">](https://github.com/cherry-embedded/HSCanT-hardware) | [<img src="boards/hscant-lite/hscant-lite.jpg" width="220" alt="HSCanT-Lite">](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) | [<img src="boards/hpm5300evklite/hpm5300evk-lite.jpg" width="220" alt="HPM5300EVK-Lite">](boards/hpm5300evklite/HPM53xx-EVK-Lite.pdf) |
 
 ### hpm_sdk EVK 开发板
 
