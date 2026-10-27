@@ -119,7 +119,7 @@ if(EXISTS ${CANDLE_BOARD_DIR}/${BOARD}.yaml)
     # Prefer a dedicated board block in candleLight's config.h (USB strings,
     # channel count, CAN clock, ...).  Without one the board is treated as a
     # single-channel EVK-style package and shares BOARD_hpmicro_evk.
-    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/candleLight_fw/include/config.h CANDLE_CONFIG_H)
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/third_party_components/candleLight_fw/include/config.h CANDLE_CONFIG_H)
     if(NOT CANDLE_CONFIG_H MATCHES "defined\\(BOARD_${CANDLE_BOARD_MACRO}\\)")
         message(STATUS "  no BOARD_${CANDLE_BOARD_MACRO} block in candleLight_fw/include/config.h: "
                        "using BOARD_hpmicro_evk (single MCAN channel, CANFD, 80 MHz CAN clock)")
@@ -157,7 +157,8 @@ sdk_ld_options("--specs=nano.specs")
 # CMakeLists in hpm_sdk.  Forcing them here breaks EVKs whose AXI SRAM is
 # smaller than the old HPM5321/HPM5361 value (HPM5E00EVK: 256 KiB total).
 
-set(CANDLE_FW ${CMAKE_CURRENT_SOURCE_DIR}/candleLight_fw)
+set(CANDLE_FW ${CMAKE_CURRENT_SOURCE_DIR}/third_party_components/candleLight_fw
+    CACHE PATH "candleLight_fw submodule root (the gs_usb application)")
 
 # ---------------------------------------------------------------------------
 # Generated version.h - candleLight's include/config.h uses GIT_HASH

@@ -284,7 +284,8 @@ candleLight_fw_hpm_port/
 │   ├── port_board.c            # board_setup(), config.channel[]
 │   ├── status_led.c  ws2812.c  # LEDs and boot animation
 │   └── usb_config.h            # CherryUSB configuration
-├── candleLight_fw/             # submodule: upstream multichannel + HPM boards
+├── third_party_components/
+│   └── candleLight_fw/         # submodule: upstream multichannel + HPM boards
 ├── README.md                   # Project overview (English, this file)
 ├── README_zh.md                # Project overview (中文)
 ├── README_build.md             # Build guide (English)

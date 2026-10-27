@@ -12,7 +12,8 @@ Before building you **must** have all three of the following:
 
 1. The HPM SDK source tree;
 2. The RISC-V cross-compilation toolchain, with the environment variables pointing at it;
-3. The `candleLight_fw/` submodule checked out (this project builds candleLight's original sources).
+3. The `third_party_components/candleLight_fw` submodule checked out (this project
+   builds candleLight's original sources).
 
 > The exact toolchain version is up to you — it is not pinned. But the SDK, the toolchain and the submodule are all indispensable.
 
@@ -35,7 +36,8 @@ The directory must contain `bin/riscv-none-elf-gcc` and the other executables.
 
 ### 1.3 Check out the submodule
 
-The original candleLight sources are kept as a git submodule. If `candleLight_fw/` is empty:
+The original candleLight sources are kept as a git submodule. If
+`third_party_components/candleLight_fw/` is empty:
 
 ```bash
 git submodule update --init --recursive
@@ -235,7 +237,8 @@ Key build configuration (see `CMakeLists.txt`):
 
 ### 4.1 A note on `board.h` and the generated include directory
 
-The build creates `build/<preset>/candle_include/`, containing **symlinks to every header in `candleLight_fw/include/` except `board.h`**. That is deliberate: `board.h` must resolve to the board package (a local `boards/<BOARD>/board.h`, or the SDK's `$HPM_SDK_BASE/boards/<BOARD>/board.h` for an EVK), while candleLight's own board abstraction is reachable as `board_layout.h`. Do not "fix" this by renaming files.
+The build creates `build/<preset>/candle_include/`, containing **symlinks to every header in
+`third_party_components/candleLight_fw/include/` except `board.h`**. That is deliberate: `board.h` must resolve to the board package (a local `boards/<BOARD>/board.h`, or the SDK's `$HPM_SDK_BASE/boards/<BOARD>/board.h` for an EVK), while candleLight's own board abstraction is reachable as `board_layout.h`. Do not "fix" this by renaming files.
 
 The generated directory also exposes candleLight's `include/zephyr` subdirectory. All application sources are compiled with a generated `app_preinclude.h` (via `-include`): it brings in `version.h` and the hardware `board.h`; for an EVK it brings in `boards/hpmicro_evk/hpmicro_evk.h` instead, which includes the SDK's `board.h` and then defines the candle contract (`BOARD_CAN_COUNT`, `BOARD_CAN_INSTANCES`, `BOARD_USB_BASE`, ...). Nothing in the SDK is patched or copied.
 

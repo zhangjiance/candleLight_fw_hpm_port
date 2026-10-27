@@ -12,7 +12,7 @@
 
 1. HPM SDK 源码；
 2. RISC-V 交叉编译工具链，且环境变量正确指向它；
-3. `candleLight_fw/` 子模块已检出（本工程会编译 candleLight 的原始源码）。
+3. `third_party_components/candleLight_fw` 子模块已检出（本工程会编译 candleLight 的原始源码）。
 
 > 工具链的**具体版本可以自行选择**，不强制与示例一致。但 SDK、工具链与子模块三者缺一不可。
 
@@ -35,7 +35,7 @@ git clone https://github.com/hpmicro/hpm_sdk.git ~/Code/SDK/hpm_sdk
 
 ### 1.3 检出子模块
 
-candleLight 原始源码以 git 子模块形式保存。若 `candleLight_fw/` 为空：
+candleLight 原始源码以 git 子模块形式保存。若 `third_party_components/candleLight_fw/` 为空：
 
 ```bash
 git submodule update --init --recursive
@@ -229,7 +229,8 @@ build/<preset>/output/candle_usb2canfd-<BOARD>.uf2   # 仅 flash_uf2 预设
 
 ### 4.1 关于 `board.h` 与自动生成的 include 目录
 
-构建时会生成 `build/<preset>/candle_include/`，里面是 **`candleLight_fw/include/` 下除 `board.h` 之外所有头文件的符号链接**。这是刻意为之：`board.h` 必须解析到板级包（本仓库的 `boards/<BOARD>/board.h`，或 EVK 的 `$HPM_SDK_BASE/boards/<BOARD>/board.h`），而 candleLight 自己的板抽象则通过 `board_layout.h` 访问。**不要**试图通过改名来"修好"它。
+构建时会生成 `build/<preset>/candle_include/`，里面是 **`third_party_components/candleLight_fw/include/` 下除 `board.h`
+之外所有头文件的符号链接**。这是刻意为之：`board.h` 必须解析到板级包（本仓库的 `boards/<BOARD>/board.h`，或 EVK 的 `$HPM_SDK_BASE/boards/<BOARD>/board.h`），而 candleLight 自己的板抽象则通过 `board_layout.h` 访问。**不要**试图通过改名来"修好"它。
 
 生成的目录还会暴露 candleLight 的 `include/zephyr` 子目录。所有应用源文件都会通过 `-include` 包含一个生成的 `app_preinclude.h`：它引入 `version.h` 和硬件 `board.h`；对 EVK 则改为引入 `boards/hpmicro_evk/hpmicro_evk.h`，由后者包含 SDK 的 `board.h` 并定义 candle 契约宏（`BOARD_CAN_COUNT`、`BOARD_CAN_INSTANCES`、`BOARD_USB_BASE` 等）。SDK 本身既不打补丁，也不复制。
 
