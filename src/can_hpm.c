@@ -36,10 +36,17 @@ const struct gs_device_bt_const CAN_btconst = {
          GS_CAN_FEATURE_TDC : 0) |
         GS_CAN_FEATURE_BUS_OFF_RECOVERY,
     .fclk_can = CAN_CLOCK_SPEED,
+    /*
+     * M_CAN's low-level validator requires TSEG2 >= 2 for classic CAN and
+     * for the FD data phase.  The FD nominal phase would accept 1, but the
+     * same bt_const is used for classic starts, so advertise the common
+     * minimum.  TSEG1 is validated including the sync segment, so the host's
+     * 1 tq minimum is representable.
+     */
     .btc = {
         .tseg1_min = 1,
         .tseg1_max = 256,
-        .tseg2_min = 1,
+        .tseg2_min = 2,
         .tseg2_max = 128,
         .sjw_max = 128,
         .brp_min = 1,
@@ -68,7 +75,7 @@ const struct gs_device_bt_const_extended CAN_btconst_ext = {
     .btc = {
         .tseg1_min = 1,
         .tseg1_max = 256,
-        .tseg2_min = 1,
+        .tseg2_min = 2,
         .tseg2_max = 128,
         .sjw_max = 128,
         .brp_min = 1,
@@ -78,7 +85,7 @@ const struct gs_device_bt_const_extended CAN_btconst_ext = {
     .dbtc = {
         .tseg1_min = 1,
         .tseg1_max = 32,
-        .tseg2_min = 1,
+        .tseg2_min = 2,
         .tseg2_max = 16,
         .sjw_max = 16,
         .brp_min = 1,
@@ -146,7 +153,7 @@ static void can_apply_timing(can_data_t *channel, mcan_config_t *cfg)
     cfg->canfd_timing.num_seg2 = dbt->phase_seg2;
     cfg->canfd_timing.num_sjw = dbt->sjw;
 
-    if (channel->tdc.mode & GS_CAN_TDC_MODE_AUTO) {
+    if (cfg->enable_canfd && (channel->tdc.mode & GS_CAN_TDC_MODE_AUTO)) {
         cfg->enable_tdc = true;
         cfg->tdc_config.ssp_offset = channel->tdc.tdco;
         cfg->tdc_config.filter_window_length = channel->tdc.tdcf;
@@ -187,7 +194,8 @@ void can_drv_enable(struct can_channel *channel)
 
     mcan_get_default_config(base, &cfg);
 
-    cfg.enable_canfd = IS_ENABLED(CONFIG_CANFD);
+    cfg.enable_canfd = IS_ENABLED(CONFIG_CANFD) &&
+                       ((feature & GS_CAN_FEATURE_FD) != 0U);
     cfg.mode = node_mode;
     cfg.disable_auto_retransmission = (channel->channel.Init.AutoRetransmission == 0U);
 
