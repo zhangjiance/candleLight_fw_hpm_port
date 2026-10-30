@@ -74,9 +74,7 @@ void can_set_bittiming(struct can_channel *channel, const struct gs_device_bitti
 bool can_check_feature_ok(const can_data_t *channel,
 						  const uint32_t feature)
 {
-	if (!IS_ENABLED(CONFIG_CANFD))
-		return true;
-
+#ifdef CONFIG_CANFD
 	/* TDC is only representable in FD mode and with a data-phase prescaler
 	 * of 1 or 2 (M_CAN DBTP.DBRP).  A host-configured TDC that violates
 	 * either rule would make mcan_init() fail; reject the start instead of
@@ -90,6 +88,10 @@ bool can_check_feature_ok(const can_data_t *channel,
 			(channel->data_bittiming.brp != 2U))
 			return false;
 	}
+#else
+	(void)channel;
+	(void)feature;
+#endif
 
 	return true;
 }
