@@ -77,10 +77,18 @@ bool can_check_feature_ok(const can_data_t *channel,
 	if (!IS_ENABLED(CONFIG_CANFD))
 		return true;
 
-	/* TDC requires TDC parameters to be set */
-	if (feature & GS_CAN_FEATURE_TDC &&
-		!(channel->flags & CAN_CHANNEL_FLAG_TDC_SET)) {
-		return false;
+	/* TDC is only representable in FD mode and with a data-phase prescaler
+	 * of 1 or 2 (M_CAN DBTP.DBRP).  A host-configured TDC that violates
+	 * either rule would make mcan_init() fail; reject the start instead of
+	 * leaving the channel silently unconfigured. */
+	if (channel->flags & CAN_CHANNEL_FLAG_TDC_SET) {
+		if (!(feature & GS_CAN_FEATURE_FD))
+			return false;
+
+		if ((channel->tdc.mode != GS_CAN_TDC_MODE_OFF) &&
+			(channel->data_bittiming.brp != 1U) &&
+			(channel->data_bittiming.brp != 2U))
+			return false;
 	}
 
 	return true;
@@ -106,6 +114,10 @@ bool can_check_tdc_ok(const struct gs_device_tdc_const *tdc_const,
 
 	/* one of OFF, AUTO or MANUAL must be active */
 	if (!mode || mode & (mode - 1))
+		return false;
+
+	/* and the controller must implement that mode */
+	if (!(mode & tdc_const->mode))
 		return false;
 
 	if (tdc->tdcv) {
@@ -138,7 +150,7 @@ void can_set_tdc(struct can_channel *channel, const struct gs_device_tdc *tdc)
 
 void can_get_device_tdc(const struct can_channel *channel, struct gs_device_tdc *tdc)
 {
-	if (tdc->mode == GS_CAN_TDC_MODE_OFF) {
+	if (channel->tdc.mode == GS_CAN_TDC_MODE_OFF) {
 		*tdc = (struct gs_device_tdc){
 			.mode = GS_CAN_TDC_MODE_OFF
 		};
@@ -155,8 +167,8 @@ static void can_clear_tdc(can_data_t *channel)
 
 static void can_calc_tdco(can_data_t *channel)
 {
-	/* host configured a TDC mode, skip TDCO calculation */
-	if (channel->feature & GS_CAN_FEATURE_TDC) {
+	/* host configured a TDC mode, keep it (validated by can_check_feature_ok) */
+	if (channel->flags & CAN_CHANNEL_FLAG_TDC_SET) {
 		return;
 	}
 
