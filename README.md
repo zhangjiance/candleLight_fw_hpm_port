@@ -1,6 +1,6 @@
 # candleLight_fw_hpm_port
 
-**candleLight / gs_usb compatible USB ⇄ CAN-FD firmware for HPMicro MCAN devices**, covering HSCanT, HSCanT-Lite and the MCAN-capable hpm_sdk EVKs, built on the HPM SDK and CherryUSB.
+**candleLight / gs_usb compatible USB ⇄ CAN-FD firmware for HPMicro MCAN devices**, covering HSCanT, HSCanT-Lite, HPM5300EVK-Lite, HPM5151EVK-Lite and the MCAN-capable hpm_sdk EVKs, built on the HPM SDK and CherryUSB.
 
 The gs_usb protocol and candleLight's frame linked-list engine are the upstream candleLight sources; this repository adds the HPMicro platform layer and follows the upstream `multichannel` branch. A host running the stock Linux `gs_usb` driver sees an ordinary candleLight / CANable device.
 
@@ -10,11 +10,11 @@ The gs_usb protocol and candleLight's frame linked-list engine are the upstream 
 
 ## Hardware
 
-### HSCanT / HSCanT-Lite / HPM5300EVK-Lite
+### HSCanT / HSCanT-Lite / HPM5300EVK-Lite / HPM5151EVK-Lite
 
-| HSCanT | HSCanT-Lite | HPM5300EVK-Lite |
-| :---: | :---: | :---: |
-| [<img src="boards/hscant/hscant.png" width="220" alt="HSCanT">](https://github.com/cherry-embedded/HSCanT-hardware) | [<img src="boards/hscant-lite/hscant-lite.jpg" width="220" alt="HSCanT-Lite">](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) | [<img src="boards/hpm5300evklite/hpm5300evk-lite.jpg" width="220" alt="HPM5300EVK-Lite">](boards/hpm5300evklite/HPM53xx-EVK-Lite.pdf) |
+| HSCanT | HSCanT-Lite | HPM5300EVK-Lite | HPM5151EVK-Lite |
+| :---: | :---: | :---: | :---: |
+| [<img src="boards/hscant/hscant.png" width="220" alt="HSCanT">](https://github.com/cherry-embedded/HSCanT-hardware) | [<img src="boards/hscant-lite/hscant-lite.jpg" width="220" alt="HSCanT-Lite">](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) | [<img src="boards/hpm5300evklite/hpm5300evk-lite.jpg" width="220" alt="HPM5300EVK-Lite">](boards/hpm5300evklite/HPM53xx-EVK-Lite.pdf) | [<img src="boards/hpm5151evklite/hpm5151evklite.png" width="220" alt="HPM5151EVK-Lite">](boards/hpm5151evklite/HPM5151-EVK-Lite.pdf) |
 
 ### hpm_sdk EVK boards
 

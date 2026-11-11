@@ -1,6 +1,6 @@
 # candleLight_fw_hpm_port 编译指导
 
-本仓库是基于 HPM SDK 与 CherryUSB 的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 应用程序，面向 HPMicro MCAN 设备：HSCanT、HSCanT-Lite 以及带 MCAN 的 hpm_sdk EVK。本文档说明如何配置环境并使用 CMake preset 完成编译。
+本仓库是基于 HPM SDK 与 CherryUSB 的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 应用程序，面向 HPMicro MCAN 设备：HSCanT、HSCanT-Lite、HPM5300EVK-Lite、HPM5151EVK-Lite 以及带 MCAN 的 hpm_sdk EVK。本文档说明如何配置环境并使用 CMake preset 完成编译。
 
 > English version: [README_build.md](./README_build.md). 工程说明： [README.md](./README.md)（英文）/ [README_zh.md](./README_zh.md)（中文）。
 
@@ -138,6 +138,8 @@ cmake --preset hscant-uf2 --fresh     # 需要 CMake >= 3.24
 | --- | --- | --- | --- | --- | --- |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
 | HSCanT-Lite | `hscant-lite-dfu` | `hscant-lite-dfu-debug` | — | — | `hscant-lite` |
+| HPM5300EVK-Lite | `hpm5300evklite-dfu` | `hpm5300evklite-dfu-debug` | — | — | `hpm5300evklite` |
+| HPM5151EVK-Lite | `hpm5151evklite-dfu` | `hpm5151evklite-dfu-debug` | — | — | `hpm5151evklite` |
 | hpm_sdk EVK（MCAN + USB） | `<evk>-dfu` | `<evk>-dfu-debug` | — | — | `<evk>` |
 
 `hscant-dfu` 预设继承隐藏的 `base`（`HPM_BUILD_TYPE=flash_dfu`）；`hscant-uf2` 预设继承 `base-uf2`（`HPM_BUILD_TYPE=flash_uf2`）；`-debug` 变体分别继承 `base-debug` / `base-uf2-debug`。查看全部 preset：

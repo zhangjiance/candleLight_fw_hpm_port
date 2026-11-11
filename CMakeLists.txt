@@ -92,7 +92,8 @@ project(candle_usb2canfd)
 # Board package resolution
 #
 #   boards/<BOARD>/  - a board package that lives in this repository
-#                      (hscant, hscant-lite, hpm5300evklite): keep using it.
+#                      (hscant, hscant-lite, hpm5300evklite, hpm5151evklite):
+#                      keep using it.
 #                      Its board package supplies the port contract, so the
 #                      candle selector is normally BOARD_<BOARD>.  A package
 #                      without a BOARD_<BOARD> block in candleLight's config.h

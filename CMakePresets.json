@@ -134,6 +134,24 @@
             "binaryDir": "${sourceDir}/build/hpm5300evklite-dfu-debug"
         },
         {
+            "name": "hpm5151evklite-dfu",
+            "displayName": "HPM5151EVK-Lite - DFU image (Release)",
+            "inherits": "base",
+            "cacheVariables": {
+                "BOARD": "hpm5151evklite"
+            },
+            "binaryDir": "${sourceDir}/build/hpm5151evklite-dfu"
+        },
+        {
+            "name": "hpm5151evklite-dfu-debug",
+            "displayName": "HPM5151EVK-Lite - DFU image (Debug)",
+            "inherits": "base-debug",
+            "cacheVariables": {
+                "BOARD": "hpm5151evklite"
+            },
+            "binaryDir": "${sourceDir}/build/hpm5151evklite-dfu-debug"
+        },
+        {
             "name": "hpm5300evk-dfu",
             "displayName": "HPM5300EVK - DFU image (Release)",
             "inherits": "base",
@@ -283,6 +301,18 @@
             "name": "hpm5300evklite-dfu-debug",
             "displayName": "Build HPM5300EVK-Lite - DFU image (Debug)",
             "configurePreset": "hpm5300evklite-dfu-debug",
+            "jobs": 8
+        },
+        {
+            "name": "hpm5151evklite-dfu",
+            "displayName": "Build HPM5151EVK-Lite - DFU image (Release)",
+            "configurePreset": "hpm5151evklite-dfu",
+            "jobs": 8
+        },
+        {
+            "name": "hpm5151evklite-dfu-debug",
+            "displayName": "Build HPM5151EVK-Lite - DFU image (Debug)",
+            "configurePreset": "hpm5151evklite-dfu-debug",
             "jobs": 8
         },
         {

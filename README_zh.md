@@ -1,6 +1,6 @@
 # candleLight_fw_hpm_port
 
-**面向 HPMicro MCAN 设备的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 固件**，覆盖 HSCanT、HSCanT-Lite 以及带 MCAN 的 hpm_sdk EVK，构建在 HPM SDK 与 CherryUSB 之上。
+**面向 HPMicro MCAN 设备的 candleLight / gs_usb 兼容 USB ⇄ CAN-FD 固件**，覆盖 HSCanT、HSCanT-Lite、HPM5300EVK-Lite、HPM5151EVK-Lite 以及带 MCAN 的 hpm_sdk EVK，构建在 HPM SDK 与 CherryUSB 之上。
 
 gs_usb 协议与 candleLight 帧链表引擎来自上游 candleLight 源码；本仓库提供 HPMicro 平台层，并跟随上游 `multichannel` 分支。因此主机端用 Linux 自带的 `gs_usb` 驱动看到的就是一个普通的 candleLight / CANable 设备。
 
@@ -10,11 +10,11 @@ gs_usb 协议与 candleLight 帧链表引擎来自上游 candleLight 源码；�
 
 ## 硬件
 
-### HSCanT / HSCanT-Lite / HPM5300EVK-Lite
+### HSCanT / HSCanT-Lite / HPM5300EVK-Lite / HPM5151EVK-Lite
 
-| HSCanT | HSCanT-Lite | HPM5300EVK-Lite |
-| :---: | :---: | :---: |
-| [<img src="boards/hscant/hscant.png" width="220" alt="HSCanT">](https://github.com/cherry-embedded/HSCanT-hardware) | [<img src="boards/hscant-lite/hscant-lite.jpg" width="220" alt="HSCanT-Lite">](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) | [<img src="boards/hpm5300evklite/hpm5300evk-lite.jpg" width="220" alt="HPM5300EVK-Lite">](boards/hpm5300evklite/HPM53xx-EVK-Lite.pdf) |
+| HSCanT | HSCanT-Lite | HPM5300EVK-Lite | HPM5151EVK-Lite |
+| :---: | :---: | :---: | :---: |
+| [<img src="boards/hscant/hscant.png" width="220" alt="HSCanT">](https://github.com/cherry-embedded/HSCanT-hardware) | [<img src="boards/hscant-lite/hscant-lite.jpg" width="220" alt="HSCanT-Lite">](https://github.com/weifengdq/SlcanX/tree/main/sch_firmware) | [<img src="boards/hpm5300evklite/hpm5300evk-lite.jpg" width="220" alt="HPM5300EVK-Lite">](boards/hpm5300evklite/HPM53xx-EVK-Lite.pdf) | [<img src="boards/hpm5151evklite/hpm5151evklite.png" width="220" alt="HPM5151EVK-Lite">](boards/hpm5151evklite/HPM5151-EVK-Lite.pdf) |
 
 ### hpm_sdk EVK 开发板
 

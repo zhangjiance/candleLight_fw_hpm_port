@@ -1,0 +1,14 @@
+# Copyright (c) 2026 HPMicro
+# SPDX-License-Identifier: BSD-3-Clause
+
+board:
+    soc: HPM5151                 # HPM5151IN6 on HPM5151-EVK-LITE
+    device: HPM5151xINx          # device name used for jlink connection
+    openocd-soc: hpm5100         # used for openocd soc config file name: hpm5100.cfg
+    openocd-probe: cmsis_dap     # used for openocd probe config file name: cmsis_dap.cfg
+    on-board-flash:
+      type: qspi-nor-flash
+      size: 1M                   # Internal boot Flash; external W25Q16 is on SPI0
+    feature:
+      - board_gpt_pin
+      - board_usb_otg

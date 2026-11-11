@@ -1,6 +1,6 @@
 # candleLight_fw_hpm_port Build Guide
 
-This repository is a candleLight / gs_usb compatible USB ⇄ CAN-FD application for HPMicro MCAN devices: HSCanT, HSCanT-Lite and the MCAN-capable hpm_sdk EVKs. It is built on the HPM SDK and CherryUSB's USB device stack. This document explains how to set up the environment and build with CMake presets.
+This repository is a candleLight / gs_usb compatible USB ⇄ CAN-FD application for HPMicro MCAN devices: HSCanT, HSCanT-Lite, HPM5300EVK-Lite, HPM5151EVK-Lite and the MCAN-capable hpm_sdk EVKs. It is built on the HPM SDK and CherryUSB's USB device stack. This document explains how to set up the environment and build with CMake presets.
 
 > 中文版见 [README_build_zh.md](./README_build_zh.md)。Project overview: [README.md](./README.md) (English) / [README_zh.md](./README_zh.md) (中文).
 
@@ -142,6 +142,8 @@ cmake --preset hscant-uf2 --fresh     # needs CMake >= 3.24
 | --- | --- | --- | --- | --- | --- |
 | HSCanT | `hscant-dfu` | `hscant-dfu-debug` | `hscant-uf2` | `hscant-uf2-debug` | `hscant` |
 | HSCanT-Lite | `hscant-lite-dfu` | `hscant-lite-dfu-debug` | — | — | `hscant-lite` |
+| HPM5300EVK-Lite | `hpm5300evklite-dfu` | `hpm5300evklite-dfu-debug` | — | — | `hpm5300evklite` |
+| HPM5151EVK-Lite | `hpm5151evklite-dfu` | `hpm5151evklite-dfu-debug` | — | — | `hpm5151evklite` |
 | hpm_sdk EVK (MCAN + USB) | `<evk>-dfu` | `<evk>-dfu-debug` | — | — | `<evk>` |
 
 The `hscant-dfu` presets inherit the hidden `base` preset (`HPM_BUILD_TYPE=flash_dfu`); the `hscant-uf2` presets inherit `base-uf2` (`HPM_BUILD_TYPE=flash_uf2`). The `-debug` variants inherit `base-debug` / `base-uf2-debug`. List them with:
